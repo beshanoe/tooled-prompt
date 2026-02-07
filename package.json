@@ -1,0 +1,71 @@
+{
+  "name": "tooled-prompt",
+  "version": "0.3.0",
+  "type": "module",
+  "description": "Runtime LLM prompt library with smart tool recognition",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "llm",
+    "ai",
+    "prompt",
+    "typescript",
+    "template-literals",
+    "openai",
+    "anthropic",
+    "tools",
+    "function-calling"
+  ],
+  "author": "Maxim Valenko",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/beshanoe/tooled-prompt.git"
+  },
+  "bugs": {
+    "url": "https://github.com/beshanoe/tooled-prompt/issues"
+  },
+  "homepage": "https://github.com/beshanoe/tooled-prompt#readme",
+  "sideEffects": false,
+  "dependencies": {
+    "file-type": "^21.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@vitest/coverage-v8": "^3.2.4",
+    "dotenv": "^16.4.0",
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0",
+    "zod": "^4.3.6"
+  },
+  "peerDependencies": {
+    "zod": ">=4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "zod": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ]
+}
