@@ -25,8 +25,7 @@
  *
  * // Or create isolated instances (silent by default)
  * import { createTooledPrompt } from 'tooled-prompt';
- * const anthropic = createTooledPrompt({ llmUrl: 'https://api.anthropic.com/v1' });
- * const openai = createTooledPrompt({ llmUrl: 'https://api.openai.com/v1' });
+ * const openai = createTooledPrompt({ apiUrl: 'https://api.openai.com/v1' });
  * ```
  *
  * @packageDocumentation

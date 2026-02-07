@@ -6,8 +6,9 @@ Deno supports npm packages natively. No install step needed.
 import { prompt, setConfig } from "npm:tooled-prompt";
 
 setConfig({
-  llmUrl: "https://api.openai.com/v1",
+  apiUrl: "https://api.openai.com/v1",
   apiKey: Deno.env.get("OPENAI_API_KEY"),
+  modelName: "gpt-5-nano"
 });
 
 function getWeather(cityName: string) {

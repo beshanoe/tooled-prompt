@@ -1,9 +1,3 @@
-/**
- * Structured Output Example - Using Zod schemas for typed responses
- *
- * Run with: npx tsx examples/structured.ts
- */
-
 import "./env.js";
 import { z } from "zod";
 import { prompt, tool } from "../src/index.js";

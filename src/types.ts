@@ -201,9 +201,9 @@ export function resolveSchema<T>(schema: ZodType<T> | SimpleSchema): ResolvedSch
  */
 export interface TooledPromptConfig {
   /** LLM API endpoint URL */
-  llmUrl?: string;
+  apiUrl?: string;
   /** Model name to use */
-  llmModel?: string;
+  modelName?: string;
   /** API key for authentication */
   apiKey?: string;
   /** Maximum iterations in tool loop */
@@ -225,9 +225,9 @@ export interface TooledPromptConfig {
  */
 export interface ResolvedTooledPromptConfig {
   /** LLM API endpoint URL */
-  llmUrl: string;
+  apiUrl: string;
   /** Model name to use */
-  llmModel: string;
+  modelName: string;
   /** API key for authentication */
   apiKey: string | undefined;
   /** Maximum iterations in tool loop */

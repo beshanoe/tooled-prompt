@@ -6,14 +6,14 @@ import z from "zod";
 
 // LLM that is good at describing images
 const imageLlm = createTooledPrompt({
-  llmUrl: process.env.TOOLED_PROMPT_LLM_URL,
-  llmModel: "gemma-3-27b-it-q4",
+  apiUrl: process.env.TOOLED_PROMPT_LLM_URL,
+  modelName: "gemma-3-27b-it-q4",
 });
 
 // LLM that is good at reasoning and using tools
 const toolLlm = createTooledPrompt({
-  llmUrl: process.env.TOOLED_PROMPT_LLM_URL,
-  llmModel: "glm4-flash-tool",
+  apiUrl: process.env.TOOLED_PROMPT_LLM_URL,
+  modelName: "glm4-flash-tool",
   showThinking: true,
 });
 

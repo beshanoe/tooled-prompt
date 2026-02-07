@@ -33,12 +33,6 @@ LLM tool calling requires manual JSON schema authoring, tool registration boiler
 
 Tagged template literals are the perfect API for LLM prompts. Functions in `${}` are auto-detected as tools. No boilerplate, no schema authoring, no framework.
 
-```typescript
-const { data } = await prompt`
-  Summarize ${readFile} the contents of config.json.
-`();
-```
-
 ## Installation
 
 ```bash
@@ -51,8 +45,9 @@ npm install tooled-prompt
 import { prompt, setConfig } from "tooled-prompt";
 
 setConfig({
-  llmUrl: "https://api.openai.com/v1",
+  apiUrl: "https://api.openai.com/v1",
   apiKey: process.env.OPENAI_API_KEY,
+  modelName: "gpt-5-nano"
 });
 
 function getWeather(cityName: string) {
@@ -91,8 +86,9 @@ import { prompt, setConfig } from "tooled-prompt";
 import * as fs from "fs/promises";
 
 setConfig({
-  llmUrl: "https://api.openai.com/v1",
-  apiKey: process.env.OPENAI_API_KEY,
+  apiUrl: "https://api.openai.com/v1",
+  apiKey: process.env.OPENAI_API_KEY,,
+  modelName: "gpt-5-nano"
 });
 
 async function readFile(filePath: string) {
@@ -281,14 +277,14 @@ Create isolated instances for different LLM providers or models with `createTool
 import { createTooledPrompt } from "tooled-prompt";
 
 const openai = createTooledPrompt({
-  llmUrl: "https://api.openai.com/v1",
+  apiUrl: "https://api.openai.com/v1",
   apiKey: process.env.OPENAI_API_KEY,
-  llmModel: "gpt-4o",
+  modelName: "gpt-4o",
 });
 
 const local = createTooledPrompt({
-  llmUrl: "http://localhost:11434/v1",
-  llmModel: "llama3.1",
+  apiUrl: "http://localhost:11434/v1",
+  modelName: "llama3.1",
 });
 
 const { data: summary } = await openai.prompt`Summarize this document`();
@@ -299,8 +295,8 @@ const { data: translation } =
 Use different models for different tasks within one workflow:
 
 ```typescript
-const imageLlm = createTooledPrompt({ llmModel: "gemma-3-27b-it" });
-const toolLlm = createTooledPrompt({ llmModel: "gpt-4o" });
+const imageLlm = createTooledPrompt({ modelName: "gemma-3-27b-it" });
+const toolLlm = createTooledPrompt({ modelName: "gpt-4o" });
 
 async function describeImage(path: string) {
   const image = readFileSync(path);
@@ -344,9 +340,9 @@ Update configuration for the default instance.
 import { setConfig } from "tooled-prompt";
 
 setConfig({
-  llmUrl: "https://api.openai.com/v1",
+  apiUrl: "https://api.openai.com/v1",
   apiKey: process.env.OPENAI_API_KEY,
-  llmModel: "gpt-4o",
+  modelName: "gpt-4o",
   temperature: 0.7,
   stream: true,
   timeout: 30000,
@@ -374,7 +370,7 @@ Create an isolated instance with its own configuration, event handlers, and tool
 ```typescript
 import { createTooledPrompt } from "tooled-prompt";
 
-const instance = createTooledPrompt({ llmUrl: "...", apiKey: "..." });
+const instance = createTooledPrompt({ apiUrl: "...", apiKey: "..." });
 // instance.prompt, instance.setConfig, instance.on, instance.off, instance.tool
 ```
 
@@ -420,9 +416,9 @@ interface TooledPromptEvents {
 
 ```typescript
 interface TooledPromptConfig {
-  llmUrl?: string; // LLM API endpoint (any OpenAI-compatible /chat/completions)
-  llmModel?: string; // Model name
+  apiUrl?: string; // LLM API endpoint (any OpenAI-compatible /chat/completions)
   apiKey?: string; // API key (sent as Bearer token)
+  modelName?: string; // Model name
   maxIterations?: number; // Max tool loop iterations
   temperature?: number; // Generation temperature (0-2)
   stream?: boolean; // Enable streaming (default: true)

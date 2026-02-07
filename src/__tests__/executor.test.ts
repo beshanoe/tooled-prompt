@@ -145,8 +145,8 @@ describe('runToolLoop', () => {
 
     emitter = new TooledPromptEmitter();
     defaultConfig = {
-      llmUrl: 'http://localhost:8080/v1',
-      llmModel: 'test-model',
+      apiUrl: 'http://localhost:8080/v1',
+      modelName: 'test-model',
       apiKey: 'test-key',
       maxIterations: undefined,
       temperature: undefined,
