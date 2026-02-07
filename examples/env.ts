@@ -4,6 +4,7 @@ import { setConfig } from "../src/index.js";
 setConfig({
   apiUrl: process.env.TOOLED_PROMPT_URL || process.env.TOOLED_PROMPT_LLM_URL,
   apiKey: process.env.TOOLED_PROMPT_API_KEY,
+  provider: process.env.TOOLED_PROMPT_PROVIDER,
   modelName: process.env.TOOLED_PROMPT_MODEL || process.env.TOOLED_PROMPT_LLM_MODEL,
   temperature: process.env.TOOLED_PROMPT_TEMPERATURE ? parseFloat(process.env.TOOLED_PROMPT_TEMPERATURE) : undefined,
   maxIterations: process.env.TOOLED_PROMPT_MAX_ITERATIONS ? parseInt(process.env.TOOLED_PROMPT_MAX_ITERATIONS, 10) : undefined,
