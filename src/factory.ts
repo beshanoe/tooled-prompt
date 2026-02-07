@@ -42,8 +42,8 @@ import {
  * Default configuration values
  */
 const DEFAULTS: ResolvedTooledPromptConfig = {
-  llmUrl: "",
-  llmModel: "",
+  apiUrl: "",
+  modelName: "",
   apiKey: undefined,
   maxIterations: undefined,
   temperature: undefined,
@@ -89,11 +89,11 @@ function mergeConfigs(
 
   // Process configs in order (first has highest priority)
   for (const config of configs) {
-    if (config.llmUrl !== undefined && result.llmUrl === undefined) {
-      result.llmUrl = config.llmUrl;
+    if (config.apiUrl !== undefined && result.apiUrl === undefined) {
+      result.apiUrl = config.apiUrl;
     }
-    if (config.llmModel !== undefined && result.llmModel === undefined) {
-      result.llmModel = config.llmModel;
+    if (config.modelName !== undefined && result.modelName === undefined) {
+      result.modelName = config.modelName;
     }
     if (config.apiKey !== undefined && result.apiKey === undefined) {
       result.apiKey = config.apiKey;
@@ -126,8 +126,8 @@ function mergeConfigs(
 
   // Apply defaults for any remaining undefined values
   return {
-    llmUrl: result.llmUrl ?? DEFAULTS.llmUrl,
-    llmModel: result.llmModel ?? DEFAULTS.llmModel,
+    apiUrl: result.apiUrl ?? DEFAULTS.apiUrl,
+    modelName: result.modelName ?? DEFAULTS.modelName,
     apiKey: result.apiKey ?? DEFAULTS.apiKey,
     maxIterations: result.maxIterations ?? DEFAULTS.maxIterations,
     temperature: result.temperature ?? DEFAULTS.temperature,
@@ -151,13 +151,13 @@ function mergeConfigs(
  *
  * // Create with custom config
  * const anthropic = createTooledPrompt({
- *   llmUrl: 'https://api.anthropic.com/v1',
+ *   apiUrl: 'https://api.anthropic.com/v1',
  *   apiKey: process.env.ANTHROPIC_API_KEY,
  * });
  *
  * // Multiple isolated instances
- * const openai = createTooledPrompt({ llmUrl: 'https://api.openai.com/v1' });
- * const local = createTooledPrompt({ llmUrl: 'http://localhost:8080/v1' });
+ * const openai = createTooledPrompt({ apiUrl: 'https://api.openai.com/v1' });
+ * const local = createTooledPrompt({ apiUrl: 'http://localhost:8080/v1' });
  * ```
  */
 export function createTooledPrompt(

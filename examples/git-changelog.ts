@@ -1,5 +1,5 @@
 import "./env.js";
-import { prompt, tool, store } from "../src/index.js";
+import { prompt, store } from "../src/index.js";
 import { execSync } from "child_process";
 import * as fs from "fs/promises";
 import { z } from "zod";

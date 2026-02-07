@@ -210,13 +210,13 @@ export async function runToolLoop<T = string>(
   const openaiTools = toolsToOpenAI(tools);
 
   // Config is already resolved - use values directly
-  const { llmUrl, llmModel, apiKey: llmApiKey, maxIterations, stream: useStreaming, timeout } = config;
+  const { apiUrl, modelName, apiKey: llmApiKey, maxIterations, stream: useStreaming, timeout } = config;
 
   let iterations = 0;
 
   while (maxIterations === undefined || iterations < maxIterations) {
     const body: Record<string, unknown> = {
-      model: llmModel,
+      model: modelName,
       messages,
       stream: useStreaming,
       ...(config.temperature !== undefined && { temperature: config.temperature }),
@@ -250,7 +250,7 @@ export async function runToolLoop<T = string>(
 
     let response: Response;
     try {
-      response = await fetch(llmUrl + '/chat/completions', {
+      response = await fetch(apiUrl + '/chat/completions', {
         method: 'POST',
         headers,
         body: JSON.stringify(body),

@@ -14,7 +14,7 @@ describe('createTooledPrompt', () => {
 
     it('creates instance with custom config', () => {
       const instance = createTooledPrompt({
-        llmUrl: 'https://custom.api.com/v1',
+        apiUrl: 'https://custom.api.com/v1',
         apiKey: 'test-key',
       });
       expect(instance).toBeDefined();
@@ -135,9 +135,9 @@ describe('createTooledPrompt', () => {
       globalThis.fetch = originalFetch;
     });
 
-    it('uses llmUrl in fetch request', async () => {
+    it('uses apiUrl in fetch request', async () => {
       const instance = createTooledPrompt({
-        llmUrl: 'https://test-api.example.com/v1',
+        apiUrl: 'https://test-api.example.com/v1',
         silent: true,
       });
 
@@ -167,9 +167,9 @@ describe('createTooledPrompt', () => {
       );
     });
 
-    it('uses llmModel in request body', async () => {
+    it('uses modelName in request body', async () => {
       const instance = createTooledPrompt({
-        llmModel: 'gpt-4-turbo',
+        modelName: 'gpt-4-turbo',
         silent: true,
       });
 
@@ -228,7 +228,7 @@ describe('createTooledPrompt', () => {
 
     it('setConfig updates values used in subsequent requests', async () => {
       const instance = createTooledPrompt({
-        llmModel: 'initial-model',
+        modelName: 'initial-model',
         silent: true,
       });
 
@@ -238,7 +238,7 @@ describe('createTooledPrompt', () => {
       expect(body.model).toBe('initial-model');
 
       // Update config
-      instance.setConfig({ llmModel: 'updated-model', temperature: 0.9 });
+      instance.setConfig({ modelName: 'updated-model', temperature: 0.9 });
 
       // Second request
       await instance.prompt`Second`();
@@ -249,12 +249,12 @@ describe('createTooledPrompt', () => {
 
     it('per-call config overrides instance config', async () => {
       const instance = createTooledPrompt({
-        llmModel: 'instance-model',
+        modelName: 'instance-model',
         temperature: 0.5,
         silent: true,
       });
 
-      await instance.prompt`Test`({ llmModel: 'call-model', temperature: 0.9 });
+      await instance.prompt`Test`({ modelName: 'call-model', temperature: 0.9 });
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.model).toBe('call-model');

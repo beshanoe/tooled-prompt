@@ -267,8 +267,8 @@ describe('integration', () => {
   describe('config is applied correctly', () => {
     it('factory config is used in API request', async () => {
       const { prompt } = createTooledPrompt({
-        llmUrl: 'https://custom-api.example.com/v1',
-        llmModel: 'custom-model',
+        apiUrl: 'https://custom-api.example.com/v1',
+        modelName: 'custom-model',
         apiKey: 'custom-key',
         temperature: 0.7,
         silent: true,
@@ -298,7 +298,7 @@ describe('integration', () => {
         silent: true,
       });
 
-      setConfig({ llmModel: 'updated-model', temperature: 0.9 });
+      setConfig({ modelName: 'updated-model', temperature: 0.9 });
 
       mockFetch.mockResolvedValue(mockLLMResponse('OK'));
 
@@ -311,14 +311,14 @@ describe('integration', () => {
 
     it('per-call config overrides instance config', async () => {
       const { prompt, setConfig } = createTooledPrompt({
-        llmModel: 'instance-model', temperature: 0.5, silent: true,
+        modelName: 'instance-model', temperature: 0.5, silent: true,
       });
 
       setConfig({ temperature: 0.7 });
 
       mockFetch.mockResolvedValue(mockLLMResponse('OK'));
 
-      await prompt`Test`({ temperature: 0.9, llmModel: 'call-model' });
+      await prompt`Test`({ temperature: 0.9, modelName: 'call-model' });
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.model).toBe('call-model');
