@@ -2,12 +2,20 @@
  * LLM Execution Runtime
  *
  * Handles prompt building and the LLM tool loop.
+ * Delegates provider-specific logic to ProviderAdapter implementations.
  */
 
-import { TOOL_SYMBOL, type ToolFunction, type ResolvedTooledPromptConfig, type ContentPart, type PromptContent, type ResolvedSchema } from './types.js';
+import { TOOL_SYMBOL, type ToolFunction, type ToolMetadata, type ResolvedTooledPromptConfig, type ContentPart, type PromptContent, type ResolvedSchema } from './types.js';
 import type { TooledPromptEmitter } from './events.js';
 import type { Store } from './store.js';
 import { isImageMarker } from './image.js';
+import { getProvider } from './providers/index.js';
+import type { ToolCallInfo, ToolResultInfo } from './providers/types.js';
+
+// Re-export parseSSEStream for backward compatibility
+export { parseSSEStream } from './streaming.js';
+
+const MAX_TOOL_RESULT_LENGTH = 2000;
 
 // ============================================================================
 // Prompt Building
@@ -117,67 +125,8 @@ function isToolValue(value: unknown): value is ToolFunction {
 }
 
 // ============================================================================
-// OpenAI Tool Conversion
-// ============================================================================
-
-/**
- * Convert tool functions to OpenAI tool format
- */
-export function toolsToOpenAI(tools: ToolFunction[]): Array<{
-  type: 'function';
-  function: {
-    name: string;
-    description: string;
-    parameters: Record<string, unknown>;
-  };
-}> {
-  return tools.map((tool) => {
-    const metadata = tool[TOOL_SYMBOL];
-    return {
-      type: 'function' as const,
-      function: {
-        name: metadata.name,
-        description: metadata.description,
-        parameters: metadata.parameters as Record<string, unknown>,
-      },
-    };
-  });
-}
-
-// ============================================================================
 // LLM Tool Loop
 // ============================================================================
-
-/**
- * Parse SSE stream and yield chunks
- */
-async function* parseSSEStream(
-  reader: ReadableStreamDefaultReader<Uint8Array>
-): AsyncGenerator<any> {
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-
-    for (const line of lines) {
-      if (line.startsWith('data: ')) {
-        const data = line.slice(6).trim();
-        if (data === '[DONE]') return;
-        try {
-          yield JSON.parse(data);
-        } catch {
-          // Skip invalid JSON
-        }
-      }
-    }
-  }
-}
 
 /**
  * Run the LLM tool loop until completion or max iterations.
@@ -191,6 +140,8 @@ async function* parseSSEStream(
  * @param emitter - Event emitter for streaming events
  * @param schema - Optional resolved schema for structured output
  * @param returnStore - Optional return store; when filled, the tool loop exits early
+ * @param systemPrompt - Optional processed system prompt text
+ * @param systemImages - Optional images extracted from system prompt
  */
 export async function runToolLoop<T = string>(
   promptText: PromptContent,
@@ -199,50 +150,33 @@ export async function runToolLoop<T = string>(
   emitter: TooledPromptEmitter,
   schema?: ResolvedSchema<T>,
   returnStore?: Store<T>,
+  systemPrompt?: PromptContent,
+  systemImages?: ContentPart[],
 ): Promise<T> {
-  const messages: Array<{
-    role: string;
-    content: string | ContentPart[] | null;
-    tool_calls?: unknown[];
-    tool_call_id?: string;
-  }> = [{ role: 'user', content: promptText }];
+  const provider = getProvider(config.provider);
+  const toolMeta: ToolMetadata[] = tools.map(t => t[TOOL_SYMBOL]);
 
-  const openaiTools = toolsToOpenAI(tools);
+  // Format user message, prepending any system images
+  const messages: unknown[] = [provider.formatUserMessage(promptText, systemImages)];
 
   // Config is already resolved - use values directly
-  const { apiUrl, modelName, apiKey: llmApiKey, maxIterations, stream: useStreaming, timeout } = config;
+  const { apiUrl, modelName, apiKey, maxIterations, stream: useStreaming, timeout } = config;
 
   let iterations = 0;
 
   while (maxIterations === undefined || iterations < maxIterations) {
-    const body: Record<string, unknown> = {
-      model: modelName,
+    const { url, headers, body } = provider.buildRequest({
+      apiUrl,
+      apiKey,
+      modelName,
       messages,
+      tools: toolMeta,
       stream: useStreaming,
-      ...(config.temperature !== undefined && { temperature: config.temperature }),
-    };
-
-    // Include structured output format if schema is provided
-    if (schema) {
-      body.response_format = {
-        type: 'json_object',
-        schema: schema.jsonSchema,
-        strict: true,
-      };
-    }
-
-    // Include tools if we have any
-    if (openaiTools.length > 0) {
-      body.tools = openaiTools;
-      body.tool_choice = 'auto';
-    }
-
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    if (llmApiKey) {
-      headers['Authorization'] = 'Bearer ' + llmApiKey;
-    }
+      temperature: config.temperature,
+      maxTokens: config.maxTokens,
+      systemPrompt,
+      schema: schema ? { jsonSchema: schema.jsonSchema } : undefined,
+    });
 
     // Set up timeout with AbortController
     const controller = new AbortController();
@@ -250,7 +184,7 @@ export async function runToolLoop<T = string>(
 
     let response: Response;
     try {
-      response = await fetch(apiUrl + '/chat/completions', {
+      response = await fetch(url, {
         method: 'POST',
         headers,
         body: JSON.stringify(body),
@@ -270,84 +204,14 @@ export async function runToolLoop<T = string>(
       throw new Error(`LLM request failed (${response.status}): ${text}`);
     }
 
-    let content = '';
-    let toolCalls: Array<{
-      id: string;
-      type: 'function';
-      function: { name: string; arguments: string };
-    }> = [];
-
-    if (body.stream && response.body) {
-      // Streaming response
-      const reader = response.body.getReader();
-
-      for await (const chunk of parseSSEStream(reader)) {
-        const delta = chunk.choices?.[0]?.delta;
-        if (!delta) continue;
-
-        // Handle thinking tokens (various provider formats)
-        const thinking = delta.thinking || delta.reasoning_content || delta.reasoning;
-        if (thinking) {
-          emitter.emit('thinking', thinking);
-        }
-
-        // Handle regular content
-        if (delta.content) {
-          emitter.emit('content', delta.content);
-          content += delta.content;
-        }
-
-        // Handle tool calls (accumulated across chunks)
-        if (delta.tool_calls) {
-          for (const tc of delta.tool_calls) {
-            const idx = tc.index ?? 0;
-            if (!toolCalls[idx]) {
-              toolCalls[idx] = {
-                id: tc.id || '',
-                type: 'function',
-                function: { name: tc.function?.name || '', arguments: '' },
-              };
-            }
-            if (tc.id) toolCalls[idx].id = tc.id;
-            if (tc.function?.name) toolCalls[idx].function.name = tc.function.name;
-            if (tc.function?.arguments) toolCalls[idx].function.arguments += tc.function.arguments;
-          }
-        }
-      }
-
-      if (content) {
-        emitter.emit('content', '\n');
-      }
-    } else {
-      // Non-streaming response
-      const data = (await response.json()) as {
-        choices?: Array<{
-          message: {
-            content?: string;
-            tool_calls?: Array<{
-              id: string;
-              type: 'function';
-              function: { name: string; arguments: string };
-            }>;
-          };
-        }>;
-      };
-      const choice = data.choices?.[0];
-
-      if (!choice) {
-        throw new Error('No response from LLM');
-      }
-
-      content = choice.message.content || '';
-      toolCalls = choice.message.tool_calls || [];
-
-      if (content) {
-        emitter.emit('content', content + '\n');
-      }
-    }
+    const { content, toolCalls: rawToolCalls } = await provider.parseResponse(
+      response,
+      useStreaming,
+      emitter,
+    );
 
     // Filter out incomplete tool calls
-    toolCalls = toolCalls.filter((tc) => tc.id && tc.function.name);
+    const toolCalls = rawToolCalls.filter((tc) => tc.id && tc.name);
 
     // If no tool calls, we're done
     if (toolCalls.length === 0) {
@@ -376,24 +240,18 @@ export async function runToolLoop<T = string>(
     }
 
     // Execute tool calls and collect results
-    const toolResults: Array<{
-      id: string;
-      name: string;
-      args: Record<string, unknown>;
-      result: string;
-    }> = [];
+    const toolResults: ToolResultInfo[] = [];
 
     for (const toolCall of toolCalls) {
-      const tool = tools.find((t) => t[TOOL_SYMBOL].name === toolCall.function.name);
+      const toolFn = tools.find((t) => t[TOOL_SYMBOL].name === toolCall.name);
 
-      if (!tool) {
-        console.warn(`Unknown tool: ${toolCall.function.name}`);
+      if (!toolFn) {
+        console.warn(`Unknown tool: ${toolCall.name}`);
         toolResults.push({
           id: toolCall.id,
-          name: toolCall.function.name,
-          args: {},
+          name: toolCall.name,
           result: JSON.stringify({
-            error: `Unknown tool: ${toolCall.function.name}`,
+            error: `Unknown tool: ${toolCall.name}`,
           }),
         });
         continue;
@@ -403,27 +261,26 @@ export async function runToolLoop<T = string>(
       let input: Record<string, unknown>;
 
       try {
-        input = JSON.parse(toolCall.function.arguments);
+        input = JSON.parse(toolCall.arguments);
       } catch (err) {
         const error = `Invalid JSON arguments: ${(err as Error).message}`;
-        emitter.emit('tool_error', toolCall.function.name, error);
+        emitter.emit('tool_error', toolCall.name, error);
         toolResults.push({
           id: toolCall.id,
-          name: toolCall.function.name,
-          args: {},
+          name: toolCall.name,
           result: JSON.stringify({ error }),
         });
         continue;
       }
 
       // Emit tool_call event
-      emitter.emit('tool_call', toolCall.function.name, input);
+      emitter.emit('tool_call', toolCall.name, input);
 
       try {
         // Call the tool with its arguments
-        const paramNames = Object.keys(tool[TOOL_SYMBOL].parameters.properties || {});
+        const paramNames = Object.keys(toolFn[TOOL_SYMBOL].parameters.properties || {});
         const args = paramNames.map((name) => input[name]);
-        const result = await tool(...args);
+        const result = await toolFn(...args);
 
         // Handle void/undefined results
         let resultStr: string;
@@ -436,50 +293,34 @@ export async function runToolLoop<T = string>(
         }
 
         const duration = Date.now() - startTime;
-        emitter.emit('tool_result', toolCall.function.name, resultStr, duration);
+        emitter.emit('tool_result', toolCall.name, resultStr, duration);
+
+        // Truncate long results to avoid context overflow
+        const truncated =
+          resultStr.length > MAX_TOOL_RESULT_LENGTH
+            ? resultStr.slice(0, MAX_TOOL_RESULT_LENGTH) +
+              `\n... (truncated, ${resultStr.length} total chars)`
+            : resultStr;
 
         toolResults.push({
           id: toolCall.id,
-          name: toolCall.function.name,
-          args: input,
-          result: resultStr,
+          name: toolCall.name,
+          result: truncated,
         });
       } catch (err) {
         const error = err as Error;
-        const duration = Date.now() - startTime;
-        emitter.emit('tool_error', toolCall.function.name, error.message);
+        emitter.emit('tool_error', toolCall.name, error.message);
         toolResults.push({
           id: toolCall.id,
-          name: toolCall.function.name,
-          args: input,
+          name: toolCall.name,
           result: JSON.stringify({ error: error.message }),
         });
       }
     }
 
-    // Add assistant response to history
-    messages.push({
-      role: 'assistant',
-      content: content || null,
-      tool_calls: toolCalls,
-    });
-
-    // Add tool results to history
-    for (const tr of toolResults) {
-      // Truncate long results to avoid context overflow
-      const maxResultLength = 2000;
-      const truncated =
-        tr.result.length > maxResultLength
-          ? tr.result.slice(0, maxResultLength) +
-            `\n... (truncated, ${tr.result.length} total chars)`
-          : tr.result;
-
-      messages.push({
-        role: 'tool',
-        tool_call_id: tr.id,
-        content: truncated,
-      });
-    }
+    // Build history using provider formatting
+    messages.push(provider.formatAssistantMessage(content, toolCalls));
+    messages.push(...provider.formatToolResults(toolResults));
 
     // Check if the return store has been filled — early exit
     if (returnStore) {

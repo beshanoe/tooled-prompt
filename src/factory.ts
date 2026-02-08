@@ -19,6 +19,9 @@ import {
   type PromptResult,
   type SimpleSchema,
   type ResolvedSchema,
+  type ContentPart,
+  type PromptContent,
+  type ProcessedSystemPrompt,
   isZodSchema,
   isSimpleSchema,
   resolveSchema,
@@ -51,6 +54,9 @@ const DEFAULTS: ResolvedTooledPromptConfig = {
   timeout: 60000,
   silent: false,
   showThinking: false,
+  provider: "openai",
+  maxTokens: undefined,
+  systemPrompt: undefined,
 };
 
 /**
@@ -76,6 +82,12 @@ function validateConfig(config: TooledPromptConfig): void {
   ) {
     throw new Error("timeout must be a positive number");
   }
+  if (
+    config.maxTokens !== undefined &&
+    (config.maxTokens < 1 || !Number.isInteger(config.maxTokens))
+  ) {
+    throw new Error("maxTokens must be a positive integer");
+  }
 }
 
 /**
@@ -85,57 +97,25 @@ function validateConfig(config: TooledPromptConfig): void {
 function mergeConfigs(
   ...configs: TooledPromptConfig[]
 ): ResolvedTooledPromptConfig {
-  const result: TooledPromptConfig = {};
+  const result: Record<string, unknown> = {};
 
   // Process configs in order (first has highest priority)
   for (const config of configs) {
-    if (config.apiUrl !== undefined && result.apiUrl === undefined) {
-      result.apiUrl = config.apiUrl;
-    }
-    if (config.modelName !== undefined && result.modelName === undefined) {
-      result.modelName = config.modelName;
-    }
-    if (config.apiKey !== undefined && result.apiKey === undefined) {
-      result.apiKey = config.apiKey;
-    }
-    if (
-      config.maxIterations !== undefined &&
-      result.maxIterations === undefined
-    ) {
-      result.maxIterations = config.maxIterations;
-    }
-    if (config.temperature !== undefined && result.temperature === undefined) {
-      result.temperature = config.temperature;
-    }
-    if (config.stream !== undefined && result.stream === undefined) {
-      result.stream = config.stream;
-    }
-    if (config.timeout !== undefined && result.timeout === undefined) {
-      result.timeout = config.timeout;
-    }
-    if (config.silent !== undefined && result.silent === undefined) {
-      result.silent = config.silent;
-    }
-    if (
-      config.showThinking !== undefined &&
-      result.showThinking === undefined
-    ) {
-      result.showThinking = config.showThinking;
+    for (const [key, value] of Object.entries(config)) {
+      if (value !== undefined && result[key] === undefined) {
+        result[key] = value;
+      }
     }
   }
 
   // Apply defaults for any remaining undefined values
-  return {
-    apiUrl: result.apiUrl ?? DEFAULTS.apiUrl,
-    modelName: result.modelName ?? DEFAULTS.modelName,
-    apiKey: result.apiKey ?? DEFAULTS.apiKey,
-    maxIterations: result.maxIterations ?? DEFAULTS.maxIterations,
-    temperature: result.temperature ?? DEFAULTS.temperature,
-    stream: result.stream ?? DEFAULTS.stream,
-    timeout: result.timeout ?? DEFAULTS.timeout,
-    silent: result.silent ?? DEFAULTS.silent,
-    showThinking: result.showThinking ?? DEFAULTS.showThinking,
-  };
+  for (const [key, value] of Object.entries(DEFAULTS)) {
+    if (result[key] === undefined) {
+      result[key] = value;
+    }
+  }
+
+  return result as unknown as ResolvedTooledPromptConfig;
 }
 
 /**
@@ -200,6 +180,74 @@ export function createTooledPrompt(
   function setConfig(config: TooledPromptConfig): void {
     validateConfig(config);
     instanceConfig = { ...instanceConfig, ...config };
+  }
+
+  /**
+   * Tagged template for system prompts — extracts tools, images, and text
+   */
+  function systemPromptTag(strings: TemplateStringsArray, ...values: unknown[]): ProcessedSystemPrompt {
+    const spTools: ToolFunction[] = [];
+    const spImages: ContentPart[] = [];
+
+    // Extract tools and auto-wrap functions (same logic as prompt())
+    for (let i = 0; i < values.length; i++) {
+      const value = values[i];
+      if (typeof value === "function") {
+        if (TOOL_SYMBOL in value) {
+          spTools.push(value as ToolFunction);
+        } else {
+          const wrapped = tool(value as (...args: any[]) => any);
+          spTools.push(wrapped as ToolFunction);
+          values[i] = wrapped;
+        }
+      }
+    }
+
+    // Build prompt text (handles tool refs → "the X tool" and images)
+    const content = buildPromptText(strings, values);
+
+    // Separate images from content
+    if (Array.isArray(content)) {
+      const textParts: ContentPart[] = [];
+      for (const part of content) {
+        if (part.type === 'image_url') {
+          spImages.push(part);
+        } else {
+          textParts.push(part);
+        }
+      }
+      // Return text-only content (images go separately)
+      const textContent = textParts.length === 1 && textParts[0].type === 'text'
+        ? textParts[0].text
+        : textParts;
+      return { content: textContent as PromptContent, tools: spTools, images: spImages };
+    }
+
+    return { content, tools: spTools, images: spImages };
+  }
+
+  /**
+   * Resolve system prompt config into components
+   */
+  function resolveSystemPrompt(config: ResolvedTooledPromptConfig): {
+    systemContent?: PromptContent;
+    systemTools: ToolFunction[];
+    systemImages: ContentPart[];
+  } {
+    const sp = config.systemPrompt;
+    if (sp === undefined) {
+      return { systemTools: [], systemImages: [] };
+    }
+    if (typeof sp === 'string') {
+      return { systemContent: sp, systemTools: [], systemImages: [] };
+    }
+    // Builder callback
+    const processed = sp(systemPromptTag);
+    return {
+      systemContent: processed.content,
+      systemTools: processed.tools,
+      systemImages: processed.images,
+    };
   }
 
   /**
@@ -278,6 +326,9 @@ export function createTooledPrompt(
       // Resolve config using the priority chain
       const resolvedConfig = resolveConfig(perCallConfig);
 
+      // Resolve system prompt
+      const { systemContent, systemTools, systemImages } = resolveSystemPrompt(resolvedConfig);
+
       // Handle return sentinels
       if (returnIndices.length > 0) {
         if (!resolved) {
@@ -294,7 +345,7 @@ export function createTooledPrompt(
           resolvedValues[i] = returnStore;
         }
 
-        const allTools = [...tools, returnStore as unknown as ToolFunction];
+        const allTools = [...tools, ...systemTools, returnStore as unknown as ToolFunction];
         const processed = await processImageValues(resolvedValues);
         const promptText = buildPromptText(strings, processed);
         // No schema passed to runToolLoop — structured output comes via the store tool
@@ -305,13 +356,25 @@ export function createTooledPrompt(
           emitter,
           undefined,
           returnStore,
+          systemContent,
+          systemImages.length > 0 ? systemImages : undefined,
         );
         return { data: result };
       }
 
+      const allTools = [...tools, ...systemTools];
       const processedValues = await processImageValues(values);
       const promptText = buildPromptText(strings, processedValues);
-      const result = await runToolLoop(promptText, tools, resolvedConfig, emitter, resolved);
+      const result = await runToolLoop(
+        promptText,
+        allTools,
+        resolvedConfig,
+        emitter,
+        resolved,
+        undefined,
+        systemContent,
+        systemImages.length > 0 ? systemImages : undefined,
+      );
       return { data: result };
     };
 

@@ -93,6 +93,15 @@ export function isZodSchema(value: unknown): value is ZodType {
 /**
  * Check if a value is a SimpleSchema (plain object with string values)
  */
+/** Config keys that should not be treated as SimpleSchema fields */
+const CONFIG_KEYS: ReadonlySet<string> = new Set([
+  'apiUrl', 'modelName', 'apiKey', 'maxIterations', 'temperature',
+  'stream', 'timeout', 'silent', 'showThinking', 'provider', 'maxTokens', 'systemPrompt',
+] satisfies readonly (keyof TooledPromptConfig)[]);
+
+/**
+ * Check if a value is a SimpleSchema (plain object with string values)
+ */
 export function isSimpleSchema(value: unknown): value is SimpleSchema {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     return false;
@@ -100,6 +109,10 @@ export function isSimpleSchema(value: unknown): value is SimpleSchema {
   // Must have at least one key
   const keys = Object.keys(value);
   if (keys.length === 0) {
+    return false;
+  }
+  // Reject if any key matches a known config key
+  if (keys.some(key => CONFIG_KEYS.has(key))) {
     return false;
   }
   // All values must be strings
@@ -218,6 +231,12 @@ export interface TooledPromptConfig {
   silent?: boolean;
   /** When true, streams full thinking content. When false (default), shows only [Thinking] ... label. */
   showThinking?: boolean;
+  /** Provider to use for API communication */
+  provider?: 'openai' | 'ollama' | 'anthropic' | (string & {});
+  /** Maximum tokens for the response (required by Anthropic, useful for others) */
+  maxTokens?: number;
+  /** System prompt: plain string or callback with tagged template for tool refs and images */
+  systemPrompt?: string | SystemPromptBuilder;
 }
 
 /**
@@ -242,6 +261,12 @@ export interface ResolvedTooledPromptConfig {
   silent: boolean;
   /** When true, streams full thinking content. When false (default), shows only [Thinking] ... label. */
   showThinking: boolean;
+  /** Provider to use for API communication */
+  provider: 'openai' | 'ollama' | 'anthropic' | (string & {});
+  /** Maximum tokens for the response */
+  maxTokens: number | undefined;
+  /** System prompt */
+  systemPrompt: string | SystemPromptBuilder | undefined;
 }
 
 /**
@@ -261,7 +286,7 @@ export interface ExecutionResult {
  * Provides an extensible envelope that will later include tool usage stats and other metadata.
  */
 export interface PromptResult<T> {
-  data: T;
+  data?: T;
 }
 
 /**
@@ -307,6 +332,25 @@ export type ContentPart =
  * Prompt content: plain string when no images, content array when images are present
  */
 export type PromptContent = string | ContentPart[];
+
+/**
+ * Result of processing a system prompt template
+ */
+export interface ProcessedSystemPrompt {
+  content: PromptContent;
+  tools: ToolFunction[];
+  images: ContentPart[];
+}
+
+/**
+ * The tagged template function passed to the builder callback
+ */
+export type SystemPromptTag = (strings: TemplateStringsArray, ...values: unknown[]) => ProcessedSystemPrompt;
+
+/**
+ * Builder callback: receives a tagged template, returns processed result
+ */
+export type SystemPromptBuilder = (prompt: SystemPromptTag) => ProcessedSystemPrompt;
 
 // Re-export event types for convenience
 export type { TooledPromptEvents } from './events.js';

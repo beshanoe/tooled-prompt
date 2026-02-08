@@ -22,6 +22,8 @@ Runtime LLM prompt library with smart tool recognition for TypeScript.
   - [Store Pattern](#store-pattern)
   - [Adding Descriptions with tool()](#adding-descriptions-with-tool)
   - [Multiple Prompt Instances](#multiple-prompt-instances)
+  - [Providers](#providers)
+  - [System Prompt](#system-prompt)
 - [API Reference](#api-reference)
 - [License](#license)
 
@@ -72,6 +74,7 @@ console.log(data);
 - **Store Pattern** — Capture structured output via tool calls with `store()` and `prompt.return`
 - **Image Support** — Pass images (Buffer/Uint8Array) directly in templates
 - **Streaming Events** — Subscribe to content, thinking, and tool events
+- **Multi-Provider** — Built-in support for OpenAI, Anthropic, and Ollama
 - **Multiple Instances** — Create isolated instances for different LLM providers
 - **TypeScript First** — Full type safety with generics
 
@@ -87,7 +90,7 @@ import * as fs from "fs/promises";
 
 setConfig({
   apiUrl: "https://api.openai.com/v1",
-  apiKey: process.env.OPENAI_API_KEY,,
+  apiKey: process.env.OPENAI_API_KEY,
   modelName: "gpt-5-nano"
 });
 
@@ -310,6 +313,64 @@ const { data } = await toolLlm.prompt`
 `();
 ```
 
+### Providers
+
+Built-in support for OpenAI-compatible, Anthropic, and Ollama. Set the `provider` config to switch:
+
+```typescript
+import { createTooledPrompt } from "tooled-prompt";
+
+// OpenAI-compatible (default)
+const openai = createTooledPrompt({
+  provider: "openai",
+  apiUrl: "https://api.openai.com/v1",
+  apiKey: process.env.OPENAI_API_KEY,
+  modelName: "gpt-4o",
+});
+
+// Anthropic
+const anthropic = createTooledPrompt({
+  provider: "anthropic",
+  apiUrl: "https://api.anthropic.com/v1",
+  apiKey: process.env.ANTHROPIC_API_KEY,
+  modelName: "claude-sonnet-4-5",
+  maxTokens: 8192,
+});
+
+// Ollama
+const ollama = createTooledPrompt({
+  provider: "ollama",
+  apiUrl: "http://localhost:11434",
+  modelName: "llama3.1",
+});
+```
+
+You can also register custom providers:
+
+```typescript
+import { registerProvider } from "tooled-prompt";
+
+registerProvider("my-provider", myProviderAdapter);
+```
+
+### System Prompt
+
+Set a system prompt as a plain string or as a builder callback with tool references:
+
+```typescript
+// Plain string
+const { prompt } = createTooledPrompt({
+  systemPrompt: "You are a helpful assistant.",
+});
+
+// Builder callback — tools in the system prompt are available to the LLM
+const { prompt } = createTooledPrompt({
+  systemPrompt: (prompt) => prompt`
+    You are a code assistant. Use ${searchDocs} to find relevant documentation.
+  `,
+});
+```
+
 ## API Reference
 
 ### `prompt`
@@ -416,15 +477,18 @@ interface TooledPromptEvents {
 
 ```typescript
 interface TooledPromptConfig {
-  apiUrl?: string; // LLM API endpoint (any OpenAI-compatible /chat/completions)
-  apiKey?: string; // API key (sent as Bearer token)
+  apiUrl?: string; // LLM API endpoint
+  apiKey?: string; // API key
   modelName?: string; // Model name
+  provider?: string; // "openai" (default) | "anthropic" | "ollama" | custom
+  maxTokens?: number; // Max response tokens (required by Anthropic, defaults to 4096)
   maxIterations?: number; // Max tool loop iterations
   temperature?: number; // Generation temperature (0-2)
   stream?: boolean; // Enable streaming (default: true)
   timeout?: number; // Request timeout in ms (default: 60000)
-  silent?: boolean; // Suppress console output (default: false for default instance)
+  silent?: boolean; // Suppress console output (default: false)
   showThinking?: boolean; // Show full thinking content (default: false)
+  systemPrompt?: string | SystemPromptBuilder; // System prompt (string or builder callback)
 }
 ```
 

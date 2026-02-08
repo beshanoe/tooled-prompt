@@ -58,7 +58,27 @@ export type {
   TooledPromptEvents,
   ContentPart,
   PromptContent,
+  ProcessedSystemPrompt,
+  SystemPromptBuilder,
+  SystemPromptTag,
 } from './types.js';
+
+// Provider system
+export {
+  getProvider,
+  registerProvider,
+  OpenAIProvider,
+  AnthropicProvider,
+  OllamaProvider,
+  parseDataUrl,
+  toolsToOpenAIFormat,
+  type ProviderAdapter,
+  type ToolCallInfo,
+  type ToolResultInfo,
+  type ParsedResponse,
+  type BuildRequestParams,
+  type BuildRequestResult,
+} from './providers/index.js';
 
 // Event utilities
 export {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { buildPromptText, toolsToOpenAI, runToolLoop } from '../executor.js';
+import { buildPromptText, runToolLoop } from '../executor.js';
 import { tool, TOOL_SYMBOL, type ToolFunction } from '../tool.js';
 import type { ResolvedTooledPromptConfig } from '../types.js';
 import { resolveSchema } from '../types.js';
@@ -74,63 +74,6 @@ describe('buildPromptText', () => {
   });
 });
 
-describe('toolsToOpenAI', () => {
-  it('converts tool functions to OpenAI format', () => {
-    function greet(name: string) {
-      return `Hello, ${name}!`;
-    }
-    const wrapped = tool(greet, { description: 'Greets a person', args: ['The name'] });
-
-    const result = toolsToOpenAI([wrapped]);
-
-    expect(result).toHaveLength(1);
-    expect(result[0]).toEqual({
-      type: 'function',
-      function: {
-        name: 'greet',
-        description: 'Greets a person',
-        parameters: {
-          type: 'object',
-          properties: {
-            name: { type: 'string', description: 'The name' },
-          },
-          required: ['name'],
-          additionalProperties: false,
-        },
-      },
-    });
-  });
-
-  it('converts multiple tools', () => {
-    const tool1 = tool(function add(a: number, b: number) {
-      return a + b;
-    });
-    const tool2 = tool(function subtract(a: number, b: number) {
-      return a - b;
-    });
-
-    const result = toolsToOpenAI([tool1, tool2]);
-
-    expect(result).toHaveLength(2);
-    expect(result[0].function.name).toBe('add');
-    expect(result[1].function.name).toBe('subtract');
-  });
-
-  it('handles tools with optional parameters', () => {
-    function search(query: string, limit = 10) {
-      return query;
-    }
-    const wrapped = tool(search, {
-      args: ['Search query', 'Max results'],
-    });
-
-    const result = toolsToOpenAI([wrapped]);
-
-    expect(result[0].function.parameters.required).toContain('query');
-    expect(result[0].function.parameters.required).not.toContain('limit');
-  });
-});
-
 describe('runToolLoop', () => {
   let originalFetch: typeof globalThis.fetch;
   let mockFetch: ReturnType<typeof vi.fn>;
@@ -154,6 +97,9 @@ describe('runToolLoop', () => {
       timeout: 60000,
       silent: true,
       showThinking: false,
+      provider: 'openai',
+      maxTokens: undefined,
+      systemPrompt: undefined,
     };
   });
 
