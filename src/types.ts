@@ -286,7 +286,7 @@ export interface ExecutionResult {
  * Provides an extensible envelope that will later include tool usage stats and other metadata.
  */
 export interface PromptResult<T> {
-  data: T;
+  data?: T;
 }
 
 /**

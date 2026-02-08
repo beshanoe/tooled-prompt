@@ -45,7 +45,7 @@ export function toolsToOpenAIFormat(tools: ToolMetadata[]): Array<{
     function: {
       name: meta.name,
       description: meta.description,
-      parameters: meta.parameters as Record<string, unknown>,
+      parameters: meta.parameters,
     },
   }));
 }

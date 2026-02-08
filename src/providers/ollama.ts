@@ -10,6 +10,30 @@ import type { TooledPromptEmitter } from '../events.js';
 import type { ProviderAdapter, ToolCallInfo, ToolResultInfo, ParsedResponse, BuildRequestParams, BuildRequestResult } from './types.js';
 import { parseDataUrl, toolsToOpenAIFormat } from './utils.js';
 
+type OllamaToolCall = { function: { name: string; arguments: string | Record<string, unknown> } };
+
+interface OllamaResponseMessage {
+  content?: string;
+  tool_calls?: Array<{
+    function?: { name?: string; arguments?: string | Record<string, unknown> };
+  }>;
+}
+
+interface OllamaStreamChunk {
+  done?: boolean;
+  message?: OllamaResponseMessage;
+}
+
+interface OllamaResponse {
+  message?: OllamaResponseMessage;
+}
+
+export type OllamaMessage =
+  | { role: 'system'; content: string }
+  | { role: 'user'; content: string; images?: string[] }
+  | { role: 'assistant'; content: string; tool_calls?: OllamaToolCall[] }
+  | { role: 'tool'; content: string };
+
 function extractBase64Images(parts: ContentPart[]): string[] {
   const images: string[] = [];
   for (const part of parts) {
@@ -33,7 +57,7 @@ function extractText(content: PromptContent): string {
     .join('');
 }
 
-export class OllamaProvider implements ProviderAdapter {
+export class OllamaProvider implements ProviderAdapter<OllamaMessage> {
   buildRequest(params: BuildRequestParams): BuildRequestResult {
     const url = params.apiUrl + '/api/chat';
 
@@ -69,7 +93,7 @@ export class OllamaProvider implements ProviderAdapter {
     return { url, headers, body };
   }
 
-  formatUserMessage(content: PromptContent, prependImages?: ContentPart[]): unknown {
+  formatUserMessage(content: PromptContent, prependImages?: ContentPart[]): OllamaMessage {
     const text = extractText(content);
     const images: string[] = [];
 
@@ -89,15 +113,12 @@ export class OllamaProvider implements ProviderAdapter {
     return { role: 'user', content: text };
   }
 
-  formatAssistantMessage(content: string, toolCalls: ToolCallInfo[]): unknown {
-    const msg: Record<string, unknown> = {
+  formatAssistantMessage(content: string, toolCalls: ToolCallInfo[]): OllamaMessage {
+    return {
       role: 'assistant',
       content: content || '',
-    };
-
-    if (toolCalls.length > 0) {
-      msg.tool_calls = toolCalls.map(tc => {
-        let args: unknown;
+      tool_calls: toolCalls.length > 0 ? toolCalls.map((tc): OllamaToolCall => {
+        let args: string | Record<string, unknown>;
         try {
           args = JSON.parse(tc.arguments);
         } catch {
@@ -106,13 +127,11 @@ export class OllamaProvider implements ProviderAdapter {
         return {
           function: { name: tc.name, arguments: args },
         };
-      });
-    }
-
-    return msg;
+      }) : undefined,
+    };
   }
 
-  formatToolResults(results: ToolResultInfo[]): unknown[] {
+  formatToolResults(results: ToolResultInfo[]): OllamaMessage[] {
     return results.map(tr => ({
       role: 'tool',
       content: tr.result,
@@ -144,7 +163,7 @@ export class OllamaProvider implements ProviderAdapter {
         for (const line of lines) {
           if (!line.trim()) continue;
 
-          let parsed: any;
+          let parsed: OllamaStreamChunk;
           try {
             parsed = JSON.parse(line);
           } catch {
@@ -178,14 +197,7 @@ export class OllamaProvider implements ProviderAdapter {
       }
     } else {
       // Non-streaming response
-      const data = await response.json() as {
-        message?: {
-          content?: string;
-          tool_calls?: Array<{
-            function?: { name?: string; arguments?: unknown };
-          }>;
-        };
-      };
+      const data = await response.json() as OllamaResponse;
 
       if (!data.message) {
         throw new Error('No response from LLM');

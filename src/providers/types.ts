@@ -44,18 +44,18 @@ export interface BuildRequestResult {
   body: Record<string, unknown>;
 }
 
-export interface ProviderAdapter {
+export interface ProviderAdapter<TMessage = unknown> {
   /** Build the full HTTP request for one loop iteration */
   buildRequest(params: BuildRequestParams): BuildRequestResult;
 
   /** Format the initial user message from prompt content, optionally prepending system images */
-  formatUserMessage(content: PromptContent, prependImages?: ContentPart[]): unknown;
+  formatUserMessage(content: PromptContent, prependImages?: ContentPart[]): TMessage;
 
   /** Format assistant response + tool calls for message history */
-  formatAssistantMessage(content: string, toolCalls: ToolCallInfo[]): unknown;
+  formatAssistantMessage(content: string, toolCalls: ToolCallInfo[]): TMessage;
 
   /** Format tool results for history. Returns message(s) to append. */
-  formatToolResults(results: ToolResultInfo[]): unknown[];
+  formatToolResults(results: ToolResultInfo[]): TMessage[];
 
   /** Parse HTTP response (streaming or non-streaming) into common format */
   parseResponse(

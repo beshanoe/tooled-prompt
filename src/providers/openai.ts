@@ -11,7 +11,15 @@ import type { ProviderAdapter, ToolCallInfo, ToolResultInfo, ParsedResponse, Bui
 import { parseSSEStream } from '../streaming.js';
 import { toolsToOpenAIFormat, enforceAdditionalProperties } from './utils.js';
 
-export class OpenAIProvider implements ProviderAdapter {
+type OpenAIToolCall = { id: string; type: 'function'; function: { name: string; arguments: string } };
+
+export type OpenAIMessage =
+  | { role: 'system'; content: PromptContent }
+  | { role: 'user'; content: PromptContent }
+  | { role: 'assistant'; content: string | null; tool_calls?: OpenAIToolCall[] }
+  | { role: 'tool'; tool_call_id: string; content: string };
+
+export class OpenAIProvider implements ProviderAdapter<OpenAIMessage> {
   buildRequest(params: BuildRequestParams): BuildRequestResult {
     const url = params.apiUrl + '/chat/completions';
 
@@ -57,7 +65,7 @@ export class OpenAIProvider implements ProviderAdapter {
     return { url, headers, body };
   }
 
-  formatUserMessage(content: PromptContent, prependImages?: ContentPart[]): unknown {
+  formatUserMessage(content: PromptContent, prependImages?: ContentPart[]): OpenAIMessage {
     if (prependImages && prependImages.length > 0) {
       // Convert content to array form if needed and prepend images
       const contentParts: ContentPart[] = [...prependImages];
@@ -71,11 +79,11 @@ export class OpenAIProvider implements ProviderAdapter {
     return { role: 'user', content };
   }
 
-  formatAssistantMessage(content: string, toolCalls: ToolCallInfo[]): unknown {
+  formatAssistantMessage(content: string, toolCalls: ToolCallInfo[]): OpenAIMessage {
     return {
       role: 'assistant',
       content: content || null,
-      tool_calls: toolCalls.length > 0 ? toolCalls.map(tc => ({
+      tool_calls: toolCalls.length > 0 ? toolCalls.map((tc): OpenAIToolCall => ({
         id: tc.id,
         type: 'function',
         function: { name: tc.name, arguments: tc.arguments },
@@ -83,7 +91,7 @@ export class OpenAIProvider implements ProviderAdapter {
     };
   }
 
-  formatToolResults(results: ToolResultInfo[]): unknown[] {
+  formatToolResults(results: ToolResultInfo[]): OpenAIMessage[] {
     return results.map((tr) => ({
       role: 'tool',
       tool_call_id: tr.id,
@@ -141,7 +149,7 @@ export class OpenAIProvider implements ProviderAdapter {
       }
     } else {
       // Non-streaming response
-      const data = (await response.json()) as {
+      const data = await response.json() as {
         choices?: Array<{
           message: {
             content?: string;
