@@ -1,6 +1,6 @@
 {
   "name": "tooled-prompt",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "type": "module",
   "description": "Runtime LLM prompt library with smart tool recognition",
   "main": "./dist/index.js",
