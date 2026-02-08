@@ -101,6 +101,71 @@ describe('AnthropicProvider', () => {
       });
       expect(body.stream).toBe(true);
     });
+
+    it('includes output_config when schema provided', () => {
+      const schema = { type: 'object', properties: { name: { type: 'string' } } };
+      const { body } = provider.buildRequest({
+        apiUrl: 'https://api.anthropic.com/v1', apiKey: undefined, modelName: 'claude-3-opus',
+        messages: [], tools: [], stream: false, temperature: undefined, maxTokens: undefined,
+        schema: { jsonSchema: schema },
+      });
+      expect(body.output_config).toEqual({
+        format: { type: 'json_schema', schema: { ...schema, additionalProperties: false } },
+      });
+    });
+
+    it('omits output_config when no schema', () => {
+      const { body } = provider.buildRequest({
+        apiUrl: 'https://api.anthropic.com/v1', apiKey: undefined, modelName: 'claude-3-opus',
+        messages: [], tools: [], stream: false, temperature: undefined, maxTokens: undefined,
+      });
+      expect(body.output_config).toBeUndefined();
+    });
+
+    it('includes both output_config and tools when both provided', () => {
+      const schema = { type: 'object', properties: { result: { type: 'string' } } };
+      const { body } = provider.buildRequest({
+        apiUrl: 'https://api.anthropic.com/v1', apiKey: undefined, modelName: 'claude-3-opus',
+        messages: [], tools: [sampleTool], stream: false, temperature: undefined, maxTokens: undefined,
+        schema: { jsonSchema: schema },
+      });
+      expect(body.output_config).toBeDefined();
+      expect(body.tools).toBeDefined();
+      expect((body.tools as any[]).length).toBe(1);
+    });
+
+    it('enforces additionalProperties:false on nested objects', () => {
+      const schema = {
+        type: 'object',
+        properties: {
+          address: {
+            type: 'object',
+            properties: {
+              city: { type: 'string' },
+            },
+          },
+          tags: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: { label: { type: 'string' } },
+            },
+          },
+        },
+      };
+      const { body } = provider.buildRequest({
+        apiUrl: 'https://api.anthropic.com/v1', apiKey: undefined, modelName: 'claude-3-opus',
+        messages: [], tools: [], stream: false, temperature: undefined, maxTokens: undefined,
+        schema: { jsonSchema: schema },
+      });
+      const outputSchema = (body.output_config as any).format.schema;
+      // Root object
+      expect(outputSchema.additionalProperties).toBe(false);
+      // Nested object
+      expect(outputSchema.properties.address.additionalProperties).toBe(false);
+      // Array item object
+      expect(outputSchema.properties.tags.items.additionalProperties).toBe(false);
+    });
   });
 
   describe('formatUserMessage', () => {

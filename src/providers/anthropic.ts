@@ -8,7 +8,7 @@
 import type { ContentPart, PromptContent } from '../types.js';
 import type { TooledPromptEmitter } from '../events.js';
 import type { ProviderAdapter, ToolCallInfo, ToolResultInfo, ParsedResponse, BuildRequestParams, BuildRequestResult } from './types.js';
-import { parseDataUrl } from './utils.js';
+import { parseDataUrl, enforceAdditionalProperties } from './utils.js';
 import { parseSSEStream } from '../streaming.js';
 
 const ANTHROPIC_DEFAULT_MAX_TOKENS = 4096;
@@ -80,24 +80,23 @@ export class AnthropicProvider implements ProviderAdapter {
       }
     }
 
+    // Native structured output via output_config.format
+    if (params.schema) {
+      body.output_config = {
+        format: {
+          type: 'json_schema',
+          schema: enforceAdditionalProperties(params.schema.jsonSchema),
+        },
+      };
+    }
+
     // Tools in Anthropic format (flat, no type:'function' wrapper)
     if (params.tools.length > 0) {
-      const anthropicTools = params.tools.map(meta => ({
+      body.tools = params.tools.map(meta => ({
         name: meta.name,
         description: meta.description,
         input_schema: meta.parameters as Record<string, unknown>,
       }));
-
-      // If we have a schema and we're using the store pattern (tool_choice),
-      // detect return_value tool and force it
-      if (params.schema) {
-        const storeToolName = params.tools.find(t => t.name === 'return_value')?.name;
-        if (storeToolName) {
-          body.tool_choice = { type: 'tool', name: storeToolName };
-        }
-      }
-
-      body.tools = anthropicTools;
     }
 
     return { url, headers, body };

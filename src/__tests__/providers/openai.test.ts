@@ -105,10 +105,21 @@ describe('OpenAIProvider', () => {
         schema: { jsonSchema: { type: 'object', properties: { name: { type: 'string' } } } },
       });
       expect(body.response_format).toEqual({
-        type: 'json_object',
-        schema: { type: 'object', properties: { name: { type: 'string' } } },
-        strict: true,
+        type: 'json_schema',
+        json_schema: {
+          name: 'response',
+          strict: true,
+          schema: { type: 'object', properties: { name: { type: 'string' } }, additionalProperties: false },
+        },
       });
+    });
+
+    it('omits response_format when no schema', () => {
+      const { body } = provider.buildRequest({
+        apiUrl: 'http://localhost', apiKey: undefined, modelName: 'gpt-4',
+        messages: [], tools: [], stream: false, temperature: undefined, maxTokens: undefined,
+      });
+      expect(body.response_format).toBeUndefined();
     });
 
     it('prepends system message when systemPrompt provided', () => {

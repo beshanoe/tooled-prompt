@@ -9,7 +9,7 @@ import type { ContentPart, PromptContent } from '../types.js';
 import type { TooledPromptEmitter } from '../events.js';
 import type { ProviderAdapter, ToolCallInfo, ToolResultInfo, ParsedResponse, BuildRequestParams, BuildRequestResult } from './types.js';
 import { parseSSEStream } from '../streaming.js';
-import { toolsToOpenAIFormat } from './utils.js';
+import { toolsToOpenAIFormat, enforceAdditionalProperties } from './utils.js';
 
 export class OpenAIProvider implements ProviderAdapter {
   buildRequest(params: BuildRequestParams): BuildRequestResult {
@@ -39,9 +39,12 @@ export class OpenAIProvider implements ProviderAdapter {
 
     if (params.schema) {
       body.response_format = {
-        type: 'json_object',
-        schema: params.schema.jsonSchema,
-        strict: true,
+        type: 'json_schema',
+        json_schema: {
+          name: 'response',
+          strict: true,
+          schema: enforceAdditionalProperties(params.schema.jsonSchema),
+        },
       };
     }
 

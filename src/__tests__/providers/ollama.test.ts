@@ -68,6 +68,14 @@ describe('OllamaProvider', () => {
       expect(body.format).toEqual(schema);
     });
 
+    it('omits format when no schema', () => {
+      const { body } = provider.buildRequest({
+        apiUrl: 'http://localhost:11434', apiKey: undefined, modelName: 'llama3',
+        messages: [], tools: [], stream: false, temperature: undefined, maxTokens: undefined,
+      });
+      expect(body.format).toBeUndefined();
+    });
+
     it('prepends system message from systemPrompt', () => {
       const { body } = provider.buildRequest({
         apiUrl: 'http://localhost:11434', apiKey: undefined, modelName: 'llama3',
