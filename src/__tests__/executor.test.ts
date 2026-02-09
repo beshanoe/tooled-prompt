@@ -100,6 +100,7 @@ describe('runToolLoop', () => {
       provider: 'openai',
       maxTokens: undefined,
       systemPrompt: undefined,
+      maxToolResultLength: undefined,
     };
   });
 

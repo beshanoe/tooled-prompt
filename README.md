@@ -489,6 +489,7 @@ interface TooledPromptConfig {
   silent?: boolean; // Suppress console output (default: false)
   showThinking?: boolean; // Show full thinking content (default: false)
   systemPrompt?: string | SystemPromptBuilder; // System prompt (string or builder callback)
+  maxToolResultLength?: number; // Max tool result chars before truncation (default: unlimited)
 }
 ```
 

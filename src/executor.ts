@@ -15,8 +15,6 @@ import type { ToolCallInfo, ToolResultInfo } from './providers/types.js';
 // Re-export parseSSEStream for backward compatibility
 export { parseSSEStream } from './streaming.js';
 
-const MAX_TOOL_RESULT_LENGTH = 2000;
-
 // ============================================================================
 // Prompt Building
 // ============================================================================
@@ -295,10 +293,10 @@ export async function runToolLoop<T = string>(
         const duration = Date.now() - startTime;
         emitter.emit('tool_result', toolCall.name, resultStr, duration);
 
-        // Truncate long results to avoid context overflow
+        // Truncate long results when maxToolResultLength is configured
         const truncated =
-          resultStr.length > MAX_TOOL_RESULT_LENGTH
-            ? resultStr.slice(0, MAX_TOOL_RESULT_LENGTH) +
+          config.maxToolResultLength && resultStr.length > config.maxToolResultLength
+            ? resultStr.slice(0, config.maxToolResultLength) +
               `\n... (truncated, ${resultStr.length} total chars)`
             : resultStr;
 
