@@ -57,6 +57,7 @@ const DEFAULTS: ResolvedTooledPromptConfig = {
   provider: "openai",
   maxTokens: undefined,
   systemPrompt: undefined,
+  maxToolResultLength: undefined,
 };
 
 /**

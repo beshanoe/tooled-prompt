@@ -35,3 +35,6 @@ coverage/
 tmp/
 temp/
 *.tmp
+
+CLAUDE.md
+.claude
