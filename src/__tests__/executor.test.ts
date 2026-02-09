@@ -495,6 +495,117 @@ describe('runToolLoop', () => {
     expect(ordered).toHaveBeenCalledWith('A', 'B', 'C');
   });
 
+  describe('iterable tool results', () => {
+    it('collects async iterable to array and JSON-stringifies', async () => {
+      async function* asyncGen() {
+        yield { name: 'file1.txt' };
+        yield { name: 'file2.txt' };
+      }
+      const iterTool = tool(function readDir() {
+        return asyncGen();
+      });
+
+      mockFetch.mockResolvedValueOnce(
+        mockLLMResponse('', [
+          { id: 'call1', function: { name: 'readDir', arguments: '{}' } },
+        ])
+      );
+      mockFetch.mockResolvedValueOnce(mockLLMResponse('Found files'));
+
+      await runToolLoop('List dir', [iterTool], defaultConfig, emitter);
+
+      const secondCall = mockFetch.mock.calls[1];
+      const body = JSON.parse(secondCall[1].body);
+      const toolMessage = body.messages.find((m: any) => m.role === 'tool');
+      expect(toolMessage.content).toBe(JSON.stringify([{ name: 'file1.txt' }, { name: 'file2.txt' }]));
+    });
+
+    it('collects sync iterable to array and JSON-stringifies', async () => {
+      function* syncGen() {
+        yield 1;
+        yield 2;
+        yield 3;
+      }
+      const iterTool = tool(function generate() {
+        return syncGen();
+      });
+
+      mockFetch.mockResolvedValueOnce(
+        mockLLMResponse('', [
+          { id: 'call1', function: { name: 'generate', arguments: '{}' } },
+        ])
+      );
+      mockFetch.mockResolvedValueOnce(mockLLMResponse('Got numbers'));
+
+      await runToolLoop('Generate', [iterTool], defaultConfig, emitter);
+
+      const secondCall = mockFetch.mock.calls[1];
+      const body = JSON.parse(secondCall[1].body);
+      const toolMessage = body.messages.find((m: any) => m.role === 'tool');
+      expect(toolMessage.content).toBe(JSON.stringify([1, 2, 3]));
+    });
+
+    it('does NOT iterate strings (passes through as-is)', async () => {
+      const strTool = tool(function getText() {
+        return 'hello';
+      });
+
+      mockFetch.mockResolvedValueOnce(
+        mockLLMResponse('', [
+          { id: 'call1', function: { name: 'getText', arguments: '{}' } },
+        ])
+      );
+      mockFetch.mockResolvedValueOnce(mockLLMResponse('Done'));
+
+      await runToolLoop('Get text', [strTool], defaultConfig, emitter);
+
+      const secondCall = mockFetch.mock.calls[1];
+      const body = JSON.parse(secondCall[1].body);
+      const toolMessage = body.messages.find((m: any) => m.role === 'tool');
+      expect(toolMessage.content).toBe('hello');
+    });
+
+    it('passes arrays through unchanged', async () => {
+      const arrTool = tool(function getList() {
+        return [1, 2, 3];
+      });
+
+      mockFetch.mockResolvedValueOnce(
+        mockLLMResponse('', [
+          { id: 'call1', function: { name: 'getList', arguments: '{}' } },
+        ])
+      );
+      mockFetch.mockResolvedValueOnce(mockLLMResponse('Done'));
+
+      await runToolLoop('Get list', [arrTool], defaultConfig, emitter);
+
+      const secondCall = mockFetch.mock.calls[1];
+      const body = JSON.parse(secondCall[1].body);
+      const toolMessage = body.messages.find((m: any) => m.role === 'tool');
+      expect(toolMessage.content).toBe(JSON.stringify([1, 2, 3]));
+    });
+
+    it('passes plain objects through unchanged', async () => {
+      const objTool = tool(function getObj() {
+        return { key: 'value' };
+      });
+
+      mockFetch.mockResolvedValueOnce(
+        mockLLMResponse('', [
+          { id: 'call1', function: { name: 'getObj', arguments: '{}' } },
+        ])
+      );
+      mockFetch.mockResolvedValueOnce(mockLLMResponse('Done'));
+
+      await runToolLoop('Get obj', [objTool], defaultConfig, emitter);
+
+      const secondCall = mockFetch.mock.calls[1];
+      const body = JSON.parse(secondCall[1].body);
+      const toolMessage = body.messages.find((m: any) => m.role === 'tool');
+      expect(toolMessage.content).toBe(JSON.stringify({ key: 'value' }));
+    });
+  });
+
   describe('streaming responses', () => {
     function createMockStream(chunks: string[]) {
       const encoder = new TextEncoder();

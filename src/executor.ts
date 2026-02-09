@@ -123,6 +123,32 @@ function isToolValue(value: unknown): value is ToolFunction {
 }
 
 // ============================================================================
+// Iterable Resolution
+// ============================================================================
+
+/**
+ * If a tool returns an async/sync iterable (e.g. Deno's readDir()),
+ * collect all items into an array so the result can be JSON-stringified.
+ * Strings and arrays pass through unchanged.
+ */
+async function resolveIterableResult(result: unknown): Promise<unknown> {
+  if (result == null || typeof result === 'string' || Array.isArray(result)) {
+    return result;
+  }
+  if (typeof result === 'object' && Symbol.asyncIterator in (result as object)) {
+    const items: unknown[] = [];
+    for await (const item of result as AsyncIterable<unknown>) {
+      items.push(item);
+    }
+    return items;
+  }
+  if (typeof result === 'object' && Symbol.iterator in (result as object)) {
+    return Array.from(result as Iterable<unknown>);
+  }
+  return result;
+}
+
+// ============================================================================
 // LLM Tool Loop
 // ============================================================================
 
@@ -278,7 +304,8 @@ export async function runToolLoop<T = string>(
         // Call the tool with its arguments
         const paramNames = Object.keys(toolFn[TOOL_SYMBOL].parameters.properties || {});
         const args = paramNames.map((name) => input[name]);
-        const result = await toolFn(...args);
+        const rawResult = await toolFn(...args);
+        const result = await resolveIterableResult(rawResult);
 
         // Handle void/undefined results
         let resultStr: string;
