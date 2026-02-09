@@ -126,3 +126,55 @@ function mixedFn(name: string, count: number) {
 }
 tool(mixedFn, { args: ['The name', z.number().describe('Repeat count')] }); // ✓
 tool(mixedFn, { args: [['name', 'The name'], z.number()] }); // ✓
+
+// ============================================================================
+// Prompt executor return types
+// ============================================================================
+
+import { prompt } from '../index.js';
+import type { PromptResult } from '../types.js';
+
+// --- No schema: data is string | undefined ---
+{
+  const res = await prompt`Hello`();
+  // data should be string | undefined
+  const data: string | undefined = res.data;
+  // @ts-expect-error - data is string | undefined, not number
+  const _bad: number = res.data;
+}
+
+// --- Zod schema: data matches inferred Zod type ---
+{
+  const UserSchema = z.object({ name: z.string(), age: z.number() });
+  const res = await prompt`Get user`(UserSchema);
+  // data should be { name: string; age: number } | undefined
+  if (res.data) {
+    const name: string = res.data.name;
+    const age: number = res.data.age;
+    // @ts-expect-error - age is number, not string
+    const _badAge: string = res.data.age;
+  }
+}
+
+// --- SimpleSchema: optional key mapping, all values string ---
+{
+  const res = await prompt`Summarize`({ summary: 'The summary', 'detail?': 'Optional detail' });
+  if (res.data) {
+    // summary is required string
+    const summary: string = res.data.summary;
+    // detail is string (mapped from 'detail?')
+    const detail: string = res.data.detail;
+    // @ts-expect-error - no key 'detail?' on result (it's mapped to 'detail')
+    res.data['detail?'];
+    // @ts-expect-error - values are string, not number
+    const _bad: number = res.data.summary;
+  }
+}
+
+// --- Config-only: still returns PromptResult<string> ---
+{
+  const res = await prompt`Hello`({ temperature: 0.5 });
+  const check: PromptResult<string> = res;
+  // @ts-expect-error - data is string | undefined, not number
+  const _bad: number = res.data;
+}

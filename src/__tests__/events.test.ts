@@ -302,7 +302,7 @@ describe('default handlers output verification', () => {
 });
 
 describe('installDefaultHandlers', () => {
-  let stdoutWriteSpy: ReturnType<typeof vi.spyOn>;
+  let stdoutWriteSpy: any;
   let consoleLogSpy: ReturnType<typeof vi.spyOn>;
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
@@ -336,7 +336,7 @@ describe('installDefaultHandlers', () => {
     installDefaultHandlers(emitter, { showThinking: () => true });
 
     const output: string[] = [];
-    stdoutWriteSpy.mockImplementation((chunk: string) => {
+    stdoutWriteSpy.mockImplementation((chunk: any) => {
       output.push(chunk);
       return true;
     });
@@ -359,7 +359,7 @@ describe('installDefaultHandlers', () => {
     installDefaultHandlers(emitter);
 
     const output: string[] = [];
-    stdoutWriteSpy.mockImplementation((chunk: string) => {
+    stdoutWriteSpy.mockImplementation((chunk: any) => {
       output.push(chunk);
       return true;
     });
@@ -380,7 +380,7 @@ describe('installDefaultHandlers', () => {
     installDefaultHandlers(emitter);
 
     const output: string[] = [];
-    stdoutWriteSpy.mockImplementation((chunk: string) => {
+    stdoutWriteSpy.mockImplementation((chunk: any) => {
       output.push(chunk);
       return true;
     });
@@ -414,7 +414,7 @@ describe('installDefaultHandlers', () => {
     installDefaultHandlers(emitter, { isSilent: () => silent });
 
     const output: string[] = [];
-    stdoutWriteSpy.mockImplementation((chunk: string) => {
+    stdoutWriteSpy.mockImplementation((chunk: any) => {
       output.push(chunk);
       return true;
     });
@@ -441,7 +441,7 @@ describe('installDefaultHandlers', () => {
     installDefaultHandlers(emitter);
 
     const output: string[] = [];
-    stdoutWriteSpy.mockImplementation((chunk: string) => {
+    stdoutWriteSpy.mockImplementation((chunk: any) => {
       output.push(chunk);
       return true;
     });
