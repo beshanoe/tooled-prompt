@@ -21,6 +21,7 @@ Runtime LLM prompt library with smart tool recognition for TypeScript.
   - [Structured Output](#structured-output)
   - [Store Pattern](#store-pattern)
   - [Adding Descriptions with tool()](#adding-descriptions-with-tool)
+  - [Config Tools](#config-tools)
   - [Multiple Prompt Instances](#multiple-prompt-instances)
   - [Providers](#providers)
   - [System Prompt](#system-prompt)
@@ -272,6 +273,27 @@ tool(createUser, {
 });
 ```
 
+### Config Tools
+
+Register tools via config so they're available to every prompt without embedding in the template:
+
+```typescript
+const { prompt, setConfig } = createTooledPrompt({
+  tools: [searchDocs, readFile],
+});
+
+// Both tools available even though they're not in the template
+await prompt`Summarize the authentication docs`();
+
+// setConfig replaces factory tools
+setConfig({ tools: [searchCode] });
+await prompt`Find the login handler`(); // only searchCode available
+
+// Per-call tools are added alongside config tools
+await prompt`Find and read the config`({ tools: [readFile] });
+// Both searchCode (from setConfig) and readFile (per-call) available
+```
+
 ### Multiple Prompt Instances
 
 Create isolated instances for different LLM providers or models with `createTooledPrompt`:
@@ -395,7 +417,7 @@ const { data } = await prompt`Your prompt here`({ temperature: 0.9 });
 
 ### `setConfig`
 
-Update configuration for the default instance.
+Update configuration for the default instance. 
 
 ```typescript
 import { setConfig } from "tooled-prompt";
@@ -409,6 +431,7 @@ setConfig({
   timeout: 30000,
   silent: false,
   showThinking: false,
+  tools: [myTool],
 });
 ```
 
@@ -490,6 +513,7 @@ interface TooledPromptConfig {
   showThinking?: boolean; // Show full thinking content (default: false)
   systemPrompt?: string | SystemPromptBuilder; // System prompt (string or builder callback)
   maxToolResultLength?: number; // Max tool result chars before truncation (default: unlimited)
+  tools?: Function[];       
 }
 ```
 

@@ -3,9 +3,8 @@
  *
  * Supports configuration priority (highest to lowest):
  * 1. Per-call config (passed to executor)
- * 2. setConfig() updates
- * 3. Factory initial config
- * 4. Hardcoded defaults
+ * 2. Instance config (factory initial, mutated by setConfig)
+ * 3. Hardcoded defaults
  */
 
 import type { ZodType } from "zod";
@@ -142,15 +141,13 @@ function mergeConfigs(
  * ```
  */
 export function createTooledPrompt(
-  config: TooledPromptConfig = {},
+  initialConfig: TooledPromptConfig = {},
 ): TooledPromptInstance {
-  const initialConfig = config;
-
   // Validate initial config
   validateConfig(initialConfig);
 
-  // Instance config (mutable via setConfig)
-  let instanceConfig: TooledPromptConfig = {};
+  // Single mutable config (copy so we don't mutate the caller's object)
+  let config: TooledPromptConfig = { ...initialConfig };
 
   // Event emitter for this instance
   const emitter = new TooledPromptEmitter();
@@ -169,18 +166,17 @@ export function createTooledPrompt(
   ): ResolvedTooledPromptConfig {
     return mergeConfigs(
       perCallConfig, // 1. Per-call (highest priority)
-      instanceConfig, // 2. setConfig() updates
-      initialConfig, // 3. Factory initial config
-      DEFAULTS, // 4. Hardcoded defaults (applied in mergeConfigs)
+      config, // 2. Instance config (factory initial, mutated by setConfig)
+      DEFAULTS, // 3. Hardcoded defaults (applied in mergeConfigs)
     );
   }
 
   /**
    * Update the instance configuration
    */
-  function setConfig(config: TooledPromptConfig): void {
-    validateConfig(config);
-    instanceConfig = { ...instanceConfig, ...config };
+  function setConfig(newConfig: TooledPromptConfig): void {
+    validateConfig(newConfig);
+    config = { ...config, ...newConfig };
   }
 
   /**
@@ -249,6 +245,16 @@ export function createTooledPrompt(
       systemTools: processed.tools,
       systemImages: processed.images,
     };
+  }
+
+  /**
+   * Collect config-level tools (per-call + instance concatenated)
+   */
+  function collectConfigTools(perCallConfig: TooledPromptConfig = {}): ToolFunction[] {
+    return [
+      ...(perCallConfig.tools || []),
+      ...(config.tools || []),
+    ];
   }
 
   /**
@@ -327,6 +333,9 @@ export function createTooledPrompt(
       // Resolve config using the priority chain
       const resolvedConfig = resolveConfig(perCallConfig);
 
+      // Collect tools from config layers
+      const configTools = collectConfigTools(perCallConfig);
+
       // Resolve system prompt
       const { systemContent, systemTools, systemImages } = resolveSystemPrompt(resolvedConfig);
 
@@ -346,7 +355,7 @@ export function createTooledPrompt(
           resolvedValues[i] = returnStore;
         }
 
-        const allTools = [...tools, ...systemTools, returnStore as unknown as ToolFunction];
+        const allTools = [...tools, ...configTools, ...systemTools, returnStore as unknown as ToolFunction];
         const processed = await processImageValues(resolvedValues);
         const promptText = buildPromptText(strings, processed);
         // No schema passed to runToolLoop — structured output comes via the store tool
@@ -363,7 +372,7 @@ export function createTooledPrompt(
         return { data: result };
       }
 
-      const allTools = [...tools, ...systemTools];
+      const allTools = [...tools, ...configTools, ...systemTools];
       const processedValues = await processImageValues(values);
       const promptText = buildPromptText(strings, processedValues);
       const result = await runToolLoop(
