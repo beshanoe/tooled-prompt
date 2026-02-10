@@ -14,6 +14,7 @@ import {
   type PromptContent,
   type ResolvedSchema,
 } from './types.js';
+import dedent from 'dedent';
 import type { TooledPromptEmitter } from './events.js';
 import type { Store } from './store.js';
 import { isImageMarker } from './image.js';
@@ -26,6 +27,14 @@ export { parseSSEStream } from './streaming.js';
 // ============================================================================
 // Prompt Building
 // ============================================================================
+
+function cleanPrompt(text: string): string {
+  return dedent(text)
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .join('\n')
+    .trim();
+}
 
 /**
  * Build the final prompt content from template parts and resolved values.
@@ -66,64 +75,35 @@ export function buildPromptText(strings: TemplateStringsArray, values: unknown[]
       }
     }
 
-    return result
-      .split('\n')
-      .map((line) => line.trimEnd())
-      .join('\n')
-      .trim();
+    return cleanPrompt(result);
   }
 
   // Image path — build ContentPart[]
-  const parts: ContentPart[] = [];
-  let textBuffer = '';
-
-  function flushText() {
-    if (textBuffer) {
-      // Apply same cleanup as the string path
-      const cleaned = textBuffer
-        .split('\n')
-        .map((line) => line.trimEnd())
-        .join('\n');
-      parts.push({ type: 'text', text: cleaned });
-      textBuffer = '';
-    }
-  }
+  const images: ContentPart[] = [];
+  let text = '';
+  let imageIndex = 0;
 
   for (let i = 0; i < strings.length; i++) {
-    textBuffer += strings[i];
+    text += strings[i];
 
     if (i < values.length) {
       const value = values[i];
 
       if (isImageMarker(value)) {
-        flushText();
-        parts.push({ type: 'image_url', image_url: { url: value.url } });
+        imageIndex++;
+        text += `image_${imageIndex}`;
+        images.push({ type: 'image_url', image_url: { url: value.url } });
       } else if (isToolValue(value)) {
-        const metadata = value[TOOL_SYMBOL];
-        textBuffer += `the "${metadata.name}" tool`;
+        text += `the "${value[TOOL_SYMBOL].name}" tool`;
       } else if (typeof value === 'string') {
-        textBuffer += value;
+        text += value;
       } else if (value !== undefined && value !== null) {
-        textBuffer += String(value);
+        text += String(value);
       }
     }
   }
 
-  flushText();
-
-  // Trim leading/trailing whitespace on first and last text parts
-  if (parts.length > 0) {
-    const first = parts[0];
-    if (first.type === 'text') {
-      first.text = first.text.replace(/^\s+/, '');
-    }
-    const last = parts[parts.length - 1];
-    if (last.type === 'text') {
-      last.text = last.text.replace(/\s+$/, '');
-    }
-  }
-
-  return parts;
+  return [{ type: 'text', text: cleanPrompt(text) }, ...images];
 }
 
 function isToolValue(value: unknown): value is ToolFunction {

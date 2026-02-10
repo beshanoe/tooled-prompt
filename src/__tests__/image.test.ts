@@ -157,7 +157,7 @@ describe('buildPromptText with images', () => {
     expect(Array.isArray(result)).toBe(true);
     const parts = result as any[];
     expect(parts).toHaveLength(2);
-    expect(parts[0]).toEqual({ type: 'text', text: 'Describe this image:' });
+    expect(parts[0]).toEqual({ type: 'text', text: 'Describe this image: image_1' });
     expect(parts[1]).toEqual({
       type: 'image_url',
       image_url: { url: 'data:image/png;base64,abc123' },
@@ -178,12 +178,10 @@ describe('buildPromptText with images', () => {
 
     expect(Array.isArray(result)).toBe(true);
     const parts = result as any[];
-    expect(parts).toHaveLength(5);
-    expect(parts[0]).toEqual({ type: 'text', text: 'Compare' });
+    expect(parts).toHaveLength(3);
+    expect(parts[0]).toEqual({ type: 'text', text: 'Compare image_1 and image_2 please' });
     expect(parts[1]).toEqual({ type: 'image_url', image_url: { url: marker.url } });
-    expect(parts[2]).toEqual({ type: 'text', text: ' and' });
-    expect(parts[3]).toEqual({ type: 'image_url', image_url: { url: marker2.url } });
-    expect(parts[4]).toEqual({ type: 'text', text: ' please' });
+    expect(parts[2]).toEqual({ type: 'image_url', image_url: { url: marker2.url } });
   });
 
   it('handles images mixed with tools', () => {
@@ -195,10 +193,9 @@ describe('buildPromptText with images', () => {
 
     expect(Array.isArray(result)).toBe(true);
     const parts = result as any[];
-    expect(parts).toHaveLength(3);
-    expect(parts[0]).toEqual({ type: 'text', text: 'Look at' });
+    expect(parts).toHaveLength(2);
+    expect(parts[0]).toEqual({ type: 'text', text: 'Look at image_1, use the "analyze" tool to analyze' });
     expect(parts[1]).toEqual({ type: 'image_url', image_url: { url: marker.url } });
-    expect(parts[2]).toEqual({ type: 'text', text: ', use the "analyze" tool to analyze' });
   });
 
   it('trims leading whitespace on first text part and trailing on last', () => {
@@ -208,7 +205,6 @@ describe('buildPromptText with images', () => {
     expect(Array.isArray(result)).toBe(true);
     const parts = result as any[];
     // First text part should have leading whitespace trimmed
-    expect(parts[0].text).toBe('Image:');
-    // No trailing text part since it would be empty after trim
+    expect(parts[0].text).toBe('Image: image_1');
   });
 });
