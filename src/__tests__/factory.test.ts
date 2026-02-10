@@ -287,9 +287,13 @@ describe('createTooledPrompt', () => {
       return (body.tools || []).map((t: any) => t.function.name);
     }
 
-    const greet = tool(function cfgGreet(name: string) { return `hi ${name}`; }, { args: [['name', 'Name to greet']] });
-    const farewell = tool(function cfgFarewell(name: string) { return `bye ${name}`; }, { args: [['name', 'Name']] });
-    const wave = tool(function cfgWave() { return '*waves*'; });
+    function cfgGreet(name: string) { return `hi ${name}`; }
+    function cfgFarewell(name: string) { return `bye ${name}`; }
+    function cfgWave() { return '*waves*'; }
+
+    const greet = tool(cfgGreet, { args: [['name', 'Name to greet']] });
+    const farewell = tool(cfgFarewell, { args: [['name', 'Name']] });
+    const wave = tool(cfgWave);
 
     it('factory config tools included in API request body', async () => {
       const instance = createTooledPrompt({ tools: [greet], silent: true });
