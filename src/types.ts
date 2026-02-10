@@ -96,7 +96,7 @@ export function isZodSchema(value: unknown): value is ZodType {
 /** Config keys that should not be treated as SimpleSchema fields */
 const CONFIG_KEYS: ReadonlySet<string> = new Set([
   'apiUrl', 'modelName', 'apiKey', 'maxIterations', 'temperature',
-  'stream', 'timeout', 'silent', 'showThinking', 'provider', 'maxTokens', 'systemPrompt', 'maxToolResultLength',
+  'stream', 'timeout', 'silent', 'showThinking', 'provider', 'maxTokens', 'systemPrompt', 'maxToolResultLength', 'tools',
 ] satisfies readonly (keyof TooledPromptConfig)[]);
 
 /**
@@ -239,6 +239,8 @@ export interface TooledPromptConfig {
   systemPrompt?: string | SystemPromptBuilder;
   /** Maximum length for tool result strings. When set, results exceeding this length are truncated. No limit by default. */
   maxToolResultLength?: number;
+  /** Tools to include in every prompt execution. setConfig replaces factory tools; per-call tools are concatenated. */
+  tools?: ToolFunction[];
 }
 
 /**

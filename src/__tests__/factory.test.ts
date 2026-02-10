@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createTooledPrompt } from '../factory.js';
+import { tool } from '../tool.js';
 
 describe('createTooledPrompt', () => {
   describe('instance creation', () => {
@@ -259,6 +260,102 @@ describe('createTooledPrompt', () => {
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.model).toBe('call-model');
       expect(body.temperature).toBe(0.9);
+    });
+  });
+
+  describe('config tools', () => {
+    let originalFetch: typeof globalThis.fetch;
+    let mockFetch: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      originalFetch = globalThis.fetch;
+      mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: 'OK' } }],
+        }),
+      });
+      globalThis.fetch = mockFetch;
+    });
+
+    afterEach(() => {
+      globalThis.fetch = originalFetch;
+    });
+
+    function toolNames(call: any): string[] {
+      const body = JSON.parse(call[1].body);
+      return (body.tools || []).map((t: any) => t.function.name);
+    }
+
+    function cfgGreet(name: string) { return `hi ${name}`; }
+    function cfgFarewell(name: string) { return `bye ${name}`; }
+    function cfgWave() { return '*waves*'; }
+
+    const greet = tool(cfgGreet, { args: [['name', 'Name to greet']] });
+    const farewell = tool(cfgFarewell, { args: [['name', 'Name']] });
+    const wave = tool(cfgWave);
+
+    it('factory config tools included in API request body', async () => {
+      const instance = createTooledPrompt({ tools: [greet], silent: true });
+      await instance.prompt`Do something`();
+
+      expect(toolNames(mockFetch.mock.calls[0])).toContain('cfgGreet');
+    });
+
+    it('setConfig tools included in API request body', async () => {
+      const instance = createTooledPrompt({ silent: true });
+      instance.setConfig({ tools: [farewell] });
+      await instance.prompt`Do something`();
+
+      expect(toolNames(mockFetch.mock.calls[0])).toContain('cfgFarewell');
+    });
+
+    it('per-call config tools included', async () => {
+      const instance = createTooledPrompt({ silent: true });
+      await instance.prompt`Do something`({ tools: [wave] });
+
+      expect(toolNames(mockFetch.mock.calls[0])).toContain('cfgWave');
+    });
+
+    it('config tools merged with template tools (not replacing)', async () => {
+      const instance = createTooledPrompt({ tools: [greet], silent: true });
+      await instance.prompt`Use ${farewell}`();
+
+      const names = toolNames(mockFetch.mock.calls[0]);
+      expect(names).toContain('cfgFarewell'); // template tool
+      expect(names).toContain('cfgGreet');    // config tool
+    });
+
+    it('setConfig tools override factory tools', async () => {
+      const instance = createTooledPrompt({ tools: [greet], silent: true });
+      instance.setConfig({ tools: [farewell] });
+      await instance.prompt`Do something`();
+
+      const names = toolNames(mockFetch.mock.calls[0]);
+      expect(names).toContain('cfgFarewell');
+      expect(names).not.toContain('cfgGreet');
+    });
+
+    it('per-call tools concatenated with instance tools', async () => {
+      const instance = createTooledPrompt({ tools: [greet], silent: true });
+      instance.setConfig({ tools: [farewell] });
+      await instance.prompt`Do something`({ tools: [wave] });
+
+      const names = toolNames(mockFetch.mock.calls[0]);
+      expect(names).toContain('cfgWave');      // per-call
+      expect(names).toContain('cfgFarewell');  // instance (replaced greet via setConfig)
+      expect(names).not.toContain('cfgGreet'); // overwritten by setConfig
+    });
+
+    it('setConfig replaces (not appends) within its layer', async () => {
+      const instance = createTooledPrompt({ silent: true });
+      instance.setConfig({ tools: [greet] });
+      instance.setConfig({ tools: [farewell] });
+      await instance.prompt`Do something`();
+
+      const names = toolNames(mockFetch.mock.calls[0]);
+      expect(names).toContain('cfgFarewell');
+      expect(names).not.toContain('cfgGreet');
     });
   });
 });
