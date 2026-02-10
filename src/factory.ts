@@ -16,6 +16,7 @@ import {
   type TooledPromptInstance,
   type PromptExecutor,
   type PromptResult,
+  type PromptTaggedTemplate,
   type SimpleSchema,
   type ResolvedSchema,
   type ContentPart,
@@ -258,13 +259,13 @@ export function createTooledPrompt(
   }
 
   /**
-   * Tagged template for defining LLM prompts
+   * Extract tools and return sentinel indices from template values.
+   * Auto-wraps plain functions as tools.
    */
-  function prompt(
+  function extractTemplateTools(
     strings: TemplateStringsArray,
-    ...values: unknown[]
-  ): PromptExecutor {
-    // Extract and auto-wrap tools from values, track return sentinel indices
+    values: unknown[],
+  ): { tools: ToolFunction[]; returnIndices: number[] } {
     const tools: ToolFunction[] = [];
     const returnIndices: number[] = [];
 
@@ -310,12 +311,41 @@ export function createTooledPrompt(
       }
     }
 
-    // Return function with overloaded signature handling
+    return { tools, returnIndices };
+  }
+
+  /**
+   * Deduplicate tools by name — later tools override earlier ones.
+   */
+  function deduplicateTools(previous: ToolFunction[], incoming: ToolFunction[]): ToolFunction[] {
+    const byName = new Map<string, ToolFunction>();
+    for (const t of previous) byName.set(t[TOOL_SYMBOL].name, t);
+    for (const t of incoming) byName.set(t[TOOL_SYMBOL].name, t);
+    return Array.from(byName.values());
+  }
+
+  /**
+   * Shared executor logic used by both `prompt()` and `buildNext()`.
+   *
+   * The caller supplies the differing parts:
+   * - `tools`: pre-assembled tool list (before config tools are added)
+   * - `includeSystemPrompt`: whether to resolve + send the system prompt (first call only)
+   * - `history`: previous messages for continuations, undefined for first call
+   */
+  interface ExecuteParams {
+    strings: TemplateStringsArray;
+    values: unknown[];
+    tools: ToolFunction[];
+    returnIndices: number[];
+    includeSystemPrompt?: boolean;
+    history?: unknown[];
+  }
+
+  function makeExecutor(params: ExecuteParams): PromptExecutor {
     const execute = async <T = string>(
       schemaOrConfig?: ZodType<T> | SimpleSchema | TooledPromptConfig,
       maybeConfig?: TooledPromptConfig,
     ): Promise<PromptResult<T>> => {
-      // Detect if first arg is a Zod schema, SimpleSchema, or config
       let resolved: ResolvedSchema<T> | undefined;
       let perCallConfig: TooledPromptConfig;
 
@@ -330,36 +360,41 @@ export function createTooledPrompt(
         perCallConfig = (schemaOrConfig as TooledPromptConfig) || {};
       }
 
-      // Resolve config using the priority chain
       const resolvedConfig = resolveConfig(perCallConfig);
-
-      // Collect tools from config layers
       const configTools = collectConfigTools(perCallConfig);
 
-      // Resolve system prompt
-      const { systemContent, systemTools, systemImages } = resolveSystemPrompt(resolvedConfig);
+      // Resolve system prompt (only on first call, not continuations)
+      let systemContent: PromptContent | undefined;
+      let systemImages: ContentPart[] | undefined;
+      let systemTools: ToolFunction[] = [];
+      if (params.includeSystemPrompt) {
+        const sp = resolveSystemPrompt(resolvedConfig);
+        systemContent = sp.systemContent;
+        systemImages = sp.systemImages.length > 0 ? sp.systemImages : undefined;
+        systemTools = sp.systemTools;
+      }
+
+      const baseTools = [...params.tools, ...systemTools];
 
       // Handle return sentinels
-      if (returnIndices.length > 0) {
+      if (params.returnIndices.length > 0) {
         if (!resolved) {
           throw new Error(
             "prompt.return requires a schema — pass a Zod schema or SimpleSchema to the executor",
           );
         }
 
-        // Create a single return store and replace all sentinel positions with it
-        const resolvedValues = [...values];
+        const resolvedValues = [...params.values];
         const returnStore = createStore<T>("return_value", resolved);
 
-        for (const i of returnIndices) {
+        for (const i of params.returnIndices) {
           resolvedValues[i] = returnStore;
         }
 
-        const allTools = [...tools, ...configTools, ...systemTools, returnStore as unknown as ToolFunction];
+        const allTools = [...baseTools, ...configTools, returnStore as unknown as ToolFunction];
         const processed = await processImageValues(resolvedValues);
-        const promptText = buildPromptText(strings, processed);
-        // No schema passed to runToolLoop — structured output comes via the store tool
-        const result = await runToolLoop<T>(
+        const promptText = buildPromptText(params.strings, processed);
+        const { result, messages } = await runToolLoop<T>(
           promptText,
           allTools,
           resolvedConfig,
@@ -367,15 +402,16 @@ export function createTooledPrompt(
           undefined,
           returnStore,
           systemContent,
-          systemImages.length > 0 ? systemImages : undefined,
+          systemImages,
+          params.history,
         );
-        return { data: result };
+        return { data: result, next: buildNext(messages, allTools) };
       }
 
-      const allTools = [...tools, ...configTools, ...systemTools];
-      const processedValues = await processImageValues(values);
-      const promptText = buildPromptText(strings, processedValues);
-      const result = await runToolLoop(
+      const allTools = [...baseTools, ...configTools];
+      const processedValues = await processImageValues(params.values);
+      const promptText = buildPromptText(params.strings, processedValues);
+      const { result, messages } = await runToolLoop(
         promptText,
         allTools,
         resolvedConfig,
@@ -383,12 +419,59 @@ export function createTooledPrompt(
         resolved,
         undefined,
         systemContent,
-        systemImages.length > 0 ? systemImages : undefined,
+        systemImages,
+        params.history,
       );
-      return { data: result };
+      return { data: result, next: buildNext(messages, allTools) };
     };
 
     return execute as PromptExecutor;
+  }
+
+  /**
+   * Build a `next` tagged template from conversation history and previous tools.
+   */
+  function buildNext(
+    prevMessages: unknown[],
+    prevTools: ToolFunction[],
+  ): PromptTaggedTemplate {
+    function next(
+      strings: TemplateStringsArray,
+      ...values: unknown[]
+    ): PromptExecutor {
+      const { tools: newTools, returnIndices } = extractTemplateTools(strings, values);
+      const mergedTools = deduplicateTools(prevTools, newTools);
+
+      return makeExecutor({
+        strings,
+        values,
+        tools: mergedTools,
+        returnIndices,
+        history: prevMessages,
+        includeSystemPrompt: true,
+      });
+    }
+
+    (next as any).return = RETURN_SENTINEL;
+    return next as PromptTaggedTemplate;
+  }
+
+  /**
+   * Tagged template for defining LLM prompts
+   */
+  function prompt(
+    strings: TemplateStringsArray,
+    ...values: unknown[]
+  ): PromptExecutor {
+    const { tools, returnIndices } = extractTemplateTools(strings, values);
+
+    return makeExecutor({
+      strings,
+      values,
+      tools,
+      returnIndices,
+      includeSystemPrompt: true,
+    });
   }
 
   // Attach return sentinel to prompt

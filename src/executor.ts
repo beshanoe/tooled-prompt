@@ -166,6 +166,7 @@ async function resolveIterableResult(result: unknown): Promise<unknown> {
  * @param returnStore - Optional return store; when filled, the tool loop exits early
  * @param systemPrompt - Optional processed system prompt text
  * @param systemImages - Optional images extracted from system prompt
+ * @param history - Optional previous conversation messages to prepend
  */
 export async function runToolLoop<T = string>(
   promptText: PromptContent,
@@ -176,12 +177,17 @@ export async function runToolLoop<T = string>(
   returnStore?: Store<T>,
   systemPrompt?: PromptContent,
   systemImages?: ContentPart[],
-): Promise<T> {
+  history?: unknown[],
+): Promise<{ result: T; messages: unknown[] }> {
+  emitter.emit('start');
   const provider = getProvider(config.provider);
   const toolMeta: ToolMetadata[] = tools.map(t => t[TOOL_SYMBOL]);
 
-  // Format user message, prepending any system images
-  const messages: unknown[] = [provider.formatUserMessage(promptText, systemImages)];
+  // Build messages: prepend history, then add new user message
+  const messages: unknown[] = [
+    ...(history || []),
+    provider.formatUserMessage(promptText, systemImages),
+  ];
 
   // Config is already resolved - use values directly
   const { apiUrl, modelName, apiKey, maxIterations, stream: useStreaming, timeout } = config;
@@ -239,6 +245,9 @@ export async function runToolLoop<T = string>(
 
     // If no tool calls, we're done
     if (toolCalls.length === 0) {
+      // Add final assistant message to history
+      messages.push(provider.formatAssistantMessage(content, []));
+
       // If we have a schema, parse and validate the response
       if (schema) {
         let parsed: unknown;
@@ -251,7 +260,7 @@ export async function runToolLoop<T = string>(
         }
 
         try {
-          return schema.parse(parsed) as T;
+          return { result: schema.parse(parsed) as T, messages };
         } catch (err) {
           throw new Error(
             `Schema validation failed: ${(err as Error).message}\n\nParsed JSON:\n${JSON.stringify(parsed, null, 2)}`
@@ -260,7 +269,7 @@ export async function runToolLoop<T = string>(
       }
 
       // No schema - return the content as string
-      return content as T;
+      return { result: content as T, messages };
     }
 
     // Execute tool calls and collect results
@@ -350,7 +359,7 @@ export async function runToolLoop<T = string>(
     // Check if the return store has been filled — early exit
     if (returnStore) {
       const val = returnStore.get();
-      if (val !== undefined) return val;
+      if (val !== undefined) return { result: val, messages };
     }
 
     iterations++;

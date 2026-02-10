@@ -263,6 +263,150 @@ describe('createTooledPrompt', () => {
     });
   });
 
+  describe('next (conversation continuation)', () => {
+    let originalFetch: typeof globalThis.fetch;
+    let mockFetch: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      originalFetch = globalThis.fetch;
+      mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: 'OK' } }],
+        }),
+      });
+      globalThis.fetch = mockFetch;
+    });
+
+    afterEach(() => {
+      globalThis.fetch = originalFetch;
+    });
+
+    it('returns next in PromptResult', async () => {
+      const instance = createTooledPrompt({ silent: true });
+      const result = await instance.prompt`Hello`();
+
+      expect(result.next).toBeInstanceOf(Function);
+      expect(result.next.return).toBeDefined();
+    });
+
+    it('next carries conversation history', async () => {
+      const instance = createTooledPrompt({ silent: true });
+
+      // First call
+      const { next } = await instance.prompt`Hello`();
+
+      // Second call via next
+      await next`Follow up`();
+
+      // Second fetch should include conversation history
+      const secondCall = mockFetch.mock.calls[1];
+      const body = JSON.parse(secondCall[1].body);
+      // Messages should be: [user "Hello", assistant "OK", user "Follow up"]
+      expect(body.messages).toHaveLength(3);
+      expect(body.messages[0].role).toBe('user');
+      expect(body.messages[1].role).toBe('assistant');
+      expect(body.messages[1].content).toBe('OK');
+      expect(body.messages[2].role).toBe('user');
+    });
+
+    it('next preserves tools from previous call', async () => {
+      const instance = createTooledPrompt({ silent: true });
+      const sayHi = (name: string) => `Hi ${name}`;
+      const sayHiTool = tool({ sayHi });
+
+      const { next } = await instance.prompt`Use ${sayHiTool}`();
+
+      // Call next without the tool in template
+      await next`Do something else`();
+
+      // Second request should still include sayHi tool
+      const secondCall = mockFetch.mock.calls[1];
+      const body = JSON.parse(secondCall[1].body);
+      const toolNames = (body.tools || []).map((t: any) => t.function.name);
+      expect(toolNames).toContain('sayHi');
+    });
+
+    it('next deduplicates tools by name (new wins)', async () => {
+      const instance = createTooledPrompt({ silent: true });
+      const myGreet1 = (name: string) => `Hi ${name}`;
+      const greetV1 = tool({ myGreet1 }, { description: 'v1' });
+
+      const { next } = await instance.prompt`Use ${greetV1}`();
+
+      // Override with same tool name but new implementation
+      const myGreet1v2 = (name: string) => `Hello ${name}`;
+      // Use explicit name to match
+      const greetV2 = tool({ myGreet1: myGreet1v2 }, { description: 'v2' });
+      await next`Use ${greetV2}`();
+
+      const secondCall = mockFetch.mock.calls[1];
+      const body = JSON.parse(secondCall[1].body);
+      const greetTools = (body.tools || []).filter((t: any) => t.function.name === 'myGreet1');
+      expect(greetTools).toHaveLength(1);
+      expect(greetTools[0].function.description).toBe('v2');
+    });
+
+    it('next can add new tools', async () => {
+      const instance = createTooledPrompt({ silent: true });
+      const greetPerson = (name: string) => `Hi ${name}`;
+      const greetTool = tool({ greetPerson });
+
+      const { next } = await instance.prompt`Use ${greetTool}`();
+
+      const wavePerson = () => 'bye';
+      const waveTool = tool({ wavePerson });
+      await next`Also ${waveTool}`();
+
+      const secondCall = mockFetch.mock.calls[1];
+      const body = JSON.parse(secondCall[1].body);
+      const toolNames = (body.tools || []).map((t: any) => t.function.name);
+      expect(toolNames).toContain('greetPerson');
+      expect(toolNames).toContain('wavePerson');
+    });
+
+    it('next chains work multiple levels deep', async () => {
+      const instance = createTooledPrompt({ silent: true });
+
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ choices: [{ message: { content: 'First' } }] }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ choices: [{ message: { content: 'Second' } }] }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ choices: [{ message: { content: 'Third' } }] }),
+        });
+
+      const { data, next: next1 } = await instance.prompt`Turn 1`();
+      expect(data).toBe('First');
+
+      const { data: d2, next: next2 } = await next1`Turn 2`();
+      expect(d2).toBe('Second');
+
+      const { data: d3 } = await next2`Turn 3`();
+      expect(d3).toBe('Third');
+
+      // Third call should have full history: 5 messages
+      // [user1, asst1, user2, asst2, user3]
+      const thirdCall = mockFetch.mock.calls[2];
+      const body = JSON.parse(thirdCall[1].body);
+      expect(body.messages).toHaveLength(5);
+    });
+
+    it('next.return sentinel is available', async () => {
+      const instance = createTooledPrompt({ silent: true });
+      const { next } = await instance.prompt`Hello`();
+
+      expect(next.return).toBeDefined();
+      expect(typeof next.return).toBe('object');
+    });
+  });
+
   describe('config tools', () => {
     let originalFetch: typeof globalThis.fetch;
     let mockFetch: ReturnType<typeof vi.fn>;
