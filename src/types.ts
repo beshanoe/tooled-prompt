@@ -42,21 +42,21 @@ export type ArgDescriptor = string | [string, string] | ZodType;
  * Recursively maps a function's parameter tuple to a tuple of arg descriptors.
  * Each position accepts a string, [name, desc] tuple, or a type-checked Zod schema.
  */
-type ArgDescriptorTuple<T extends any[]> =
-  T extends []
-    ? []
-    : T extends [infer H, ...infer R extends any[]]
-      ? [string | [string, string] | { _zod: { output: H } }, ...ArgDescriptorTuple<R>]
-      : T extends [(infer H)?]
-        ? [(string | [string, string] | { _zod: { output: NonNullable<H> } })?]
-        : [];
+type ArgDescriptorTuple<T extends any[]> = T extends []
+  ? []
+  : T extends [infer H, ...infer R extends any[]]
+    ? [string | [string, string] | { _zod: { output: H } }, ...ArgDescriptorTuple<R>]
+    : T extends [(infer H)?]
+      ? [(string | [string, string] | { _zod: { output: NonNullable<H> } })?]
+      : [];
 
 /**
  * Valid args for a tool function: always an array of arg descriptors.
  * 0-arg functions get `never` (no args allowed).
  */
-export type ArgsForFn<T extends (...args: any[]) => any> =
-  Parameters<T>['length'] extends 0 ? never : ArgDescriptorTuple<Parameters<T>>;
+export type ArgsForFn<T extends (...args: any[]) => any> = Parameters<T>['length'] extends 0
+  ? never
+  : ArgDescriptorTuple<Parameters<T>>;
 
 /**
  * Type-safe options for tool()
@@ -95,8 +95,20 @@ export function isZodSchema(value: unknown): value is ZodType {
  */
 /** Config keys that should not be treated as SimpleSchema fields */
 const CONFIG_KEYS: ReadonlySet<string> = new Set([
-  'apiUrl', 'modelName', 'apiKey', 'maxIterations', 'temperature',
-  'stream', 'timeout', 'silent', 'showThinking', 'provider', 'maxTokens', 'systemPrompt', 'maxToolResultLength', 'tools',
+  'apiUrl',
+  'modelName',
+  'apiKey',
+  'maxIterations',
+  'temperature',
+  'stream',
+  'timeout',
+  'silent',
+  'showThinking',
+  'provider',
+  'maxTokens',
+  'systemPrompt',
+  'maxToolResultLength',
+  'tools',
 ] satisfies readonly (keyof TooledPromptConfig)[]);
 
 /**
@@ -112,11 +124,11 @@ export function isSimpleSchema(value: unknown): value is SimpleSchema {
     return false;
   }
   // Reject if any key matches a known config key
-  if (keys.some(key => CONFIG_KEYS.has(key))) {
+  if (keys.some((key) => CONFIG_KEYS.has(key))) {
     return false;
   }
   // All values must be strings
-  return keys.every(key => typeof (value as Record<string, unknown>)[key] === 'string');
+  return keys.every((key) => typeof (value as Record<string, unknown>)[key] === 'string');
 }
 
 /**
@@ -316,7 +328,10 @@ export interface PromptExecutor {
   /** Execute with Zod schema - returns typed, validated data */
   <T>(schema: ZodType<T>, config?: TooledPromptConfig): Promise<PromptResult<T>>;
   /** Execute with SimpleSchema - returns object with string fields */
-  <T extends SimpleSchema>(schema: T, config?: TooledPromptConfig): Promise<PromptResult<{ [K in keyof T as K extends `${infer Base}?` ? Base : K]: string }>>;
+  <T extends SimpleSchema>(
+    schema: T,
+    config?: TooledPromptConfig,
+  ): Promise<PromptResult<{ [K in keyof T as K extends `${infer Base}?` ? Base : K]: string }>>;
 }
 
 /**
@@ -338,9 +353,7 @@ export interface TooledPromptInstance {
 /**
  * A single content part in a multi-part user message (text or image)
  */
-export type ContentPart =
-  | { type: 'text'; text: string }
-  | { type: 'image_url'; image_url: { url: string } };
+export type ContentPart = { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } };
 
 /**
  * Prompt content: plain string when no images, content array when images are present

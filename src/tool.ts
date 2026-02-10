@@ -113,11 +113,11 @@ export function tool<T extends (...args: any[]) => any>(fn: T, options: ToolOpti
 export function tool<T extends (...args: any[]) => any>(namedFn: { [K: string]: T }): ToolFunction<T>;
 export function tool<T extends (...args: any[]) => any>(
   namedFn: { [K: string]: T },
-  options: ToolOptions<T>
+  options: ToolOptions<T>,
 ): ToolFunction<T>;
 export function tool<T extends (...args: any[]) => any>(
   fnOrNamed: T | NamedFunction,
-  options?: ToolOptions<T>
+  options?: ToolOptions<T>,
 ): ToolFunction<T> {
   const { description, args } = options || {};
   // Check if it's object syntax: { myFunc }
@@ -145,7 +145,7 @@ function toolImpl<T extends (...args: any[]) => any>(
   fn: T,
   explicitName: string | undefined,
   description?: string,
-  schema?: ArgsForFn<T>
+  schema?: ArgsForFn<T>,
 ): ToolFunction<T> {
   // If already a tool, return as-is
   if (isTool(fn)) {

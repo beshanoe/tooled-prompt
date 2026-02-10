@@ -39,44 +39,76 @@ describe('OpenAIProvider', () => {
   describe('buildRequest', () => {
     it('builds correct URL', () => {
       const { url } = provider.buildRequest({
-        apiUrl: 'https://api.openai.com/v1', apiKey: 'sk-test', modelName: 'gpt-4',
-        messages: [], tools: [], stream: false, temperature: undefined, maxTokens: undefined,
+        apiUrl: 'https://api.openai.com/v1',
+        apiKey: 'sk-test',
+        modelName: 'gpt-4',
+        messages: [],
+        tools: [],
+        stream: false,
+        temperature: undefined,
+        maxTokens: undefined,
       });
       expect(url).toBe('https://api.openai.com/v1/chat/completions');
     });
 
     it('includes Authorization header', () => {
       const { headers } = provider.buildRequest({
-        apiUrl: 'http://localhost', apiKey: 'sk-test', modelName: 'gpt-4',
-        messages: [], tools: [], stream: false, temperature: undefined, maxTokens: undefined,
+        apiUrl: 'http://localhost',
+        apiKey: 'sk-test',
+        modelName: 'gpt-4',
+        messages: [],
+        tools: [],
+        stream: false,
+        temperature: undefined,
+        maxTokens: undefined,
       });
       expect(headers['Authorization']).toBe('Bearer sk-test');
     });
 
     it('omits Authorization when no apiKey', () => {
       const { headers } = provider.buildRequest({
-        apiUrl: 'http://localhost', apiKey: undefined, modelName: 'gpt-4',
-        messages: [], tools: [], stream: false, temperature: undefined, maxTokens: undefined,
+        apiUrl: 'http://localhost',
+        apiKey: undefined,
+        modelName: 'gpt-4',
+        messages: [],
+        tools: [],
+        stream: false,
+        temperature: undefined,
+        maxTokens: undefined,
       });
       expect(headers['Authorization']).toBeUndefined();
     });
 
     it('includes tools in OpenAI format', () => {
       const { body } = provider.buildRequest({
-        apiUrl: 'http://localhost', apiKey: undefined, modelName: 'gpt-4',
-        messages: [], tools: [sampleTool], stream: false, temperature: undefined, maxTokens: undefined,
+        apiUrl: 'http://localhost',
+        apiKey: undefined,
+        modelName: 'gpt-4',
+        messages: [],
+        tools: [sampleTool],
+        stream: false,
+        temperature: undefined,
+        maxTokens: undefined,
       });
-      expect(body.tools).toEqual([{
-        type: 'function',
-        function: { name: 'greet', description: 'Greet a person', parameters: sampleTool.parameters },
-      }]);
+      expect(body.tools).toEqual([
+        {
+          type: 'function',
+          function: { name: 'greet', description: 'Greet a person', parameters: sampleTool.parameters },
+        },
+      ]);
       expect(body.tool_choice).toBe('auto');
     });
 
     it('omits tools when empty', () => {
       const { body } = provider.buildRequest({
-        apiUrl: 'http://localhost', apiKey: undefined, modelName: 'gpt-4',
-        messages: [], tools: [], stream: false, temperature: undefined, maxTokens: undefined,
+        apiUrl: 'http://localhost',
+        apiKey: undefined,
+        modelName: 'gpt-4',
+        messages: [],
+        tools: [],
+        stream: false,
+        temperature: undefined,
+        maxTokens: undefined,
       });
       expect(body.tools).toBeUndefined();
       expect(body.tool_choice).toBeUndefined();
@@ -84,24 +116,42 @@ describe('OpenAIProvider', () => {
 
     it('includes temperature when set', () => {
       const { body } = provider.buildRequest({
-        apiUrl: 'http://localhost', apiKey: undefined, modelName: 'gpt-4',
-        messages: [], tools: [], stream: false, temperature: 0.7, maxTokens: undefined,
+        apiUrl: 'http://localhost',
+        apiKey: undefined,
+        modelName: 'gpt-4',
+        messages: [],
+        tools: [],
+        stream: false,
+        temperature: 0.7,
+        maxTokens: undefined,
       });
       expect(body.temperature).toBe(0.7);
     });
 
     it('includes max_tokens when set', () => {
       const { body } = provider.buildRequest({
-        apiUrl: 'http://localhost', apiKey: undefined, modelName: 'gpt-4',
-        messages: [], tools: [], stream: false, temperature: undefined, maxTokens: 1024,
+        apiUrl: 'http://localhost',
+        apiKey: undefined,
+        modelName: 'gpt-4',
+        messages: [],
+        tools: [],
+        stream: false,
+        temperature: undefined,
+        maxTokens: 1024,
       });
       expect(body.max_tokens).toBe(1024);
     });
 
     it('includes schema as response_format', () => {
       const { body } = provider.buildRequest({
-        apiUrl: 'http://localhost', apiKey: undefined, modelName: 'gpt-4',
-        messages: [], tools: [], stream: false, temperature: undefined, maxTokens: undefined,
+        apiUrl: 'http://localhost',
+        apiKey: undefined,
+        modelName: 'gpt-4',
+        messages: [],
+        tools: [],
+        stream: false,
+        temperature: undefined,
+        maxTokens: undefined,
         schema: { jsonSchema: { type: 'object', properties: { name: { type: 'string' } } } },
       });
       expect(body.response_format).toEqual({
@@ -116,17 +166,29 @@ describe('OpenAIProvider', () => {
 
     it('omits response_format when no schema', () => {
       const { body } = provider.buildRequest({
-        apiUrl: 'http://localhost', apiKey: undefined, modelName: 'gpt-4',
-        messages: [], tools: [], stream: false, temperature: undefined, maxTokens: undefined,
+        apiUrl: 'http://localhost',
+        apiKey: undefined,
+        modelName: 'gpt-4',
+        messages: [],
+        tools: [],
+        stream: false,
+        temperature: undefined,
+        maxTokens: undefined,
       });
       expect(body.response_format).toBeUndefined();
     });
 
     it('prepends system message when systemPrompt provided', () => {
       const { body } = provider.buildRequest({
-        apiUrl: 'http://localhost', apiKey: undefined, modelName: 'gpt-4',
-        messages: [{ role: 'user', content: 'Hello' }], tools: [], stream: false,
-        temperature: undefined, maxTokens: undefined, systemPrompt: 'You are helpful.',
+        apiUrl: 'http://localhost',
+        apiKey: undefined,
+        modelName: 'gpt-4',
+        messages: [{ role: 'user', content: 'Hello' }],
+        tools: [],
+        stream: false,
+        temperature: undefined,
+        maxTokens: undefined,
+        systemPrompt: 'You are helpful.',
       });
       const messages = body.messages as any[];
       expect(messages[0]).toEqual({ role: 'system', content: 'You are helpful.' });
@@ -148,9 +210,7 @@ describe('OpenAIProvider', () => {
     });
 
     it('prepends images to string content', () => {
-      const images: ContentPart[] = [
-        { type: 'image_url', image_url: { url: 'data:image/png;base64,abc' } },
-      ];
+      const images: ContentPart[] = [{ type: 'image_url', image_url: { url: 'data:image/png;base64,abc' } }];
       const result = provider.formatUserMessage('Hello', images) as any;
       expect(result.content).toHaveLength(2);
       expect(result.content[0].type).toBe('image_url');
@@ -161,16 +221,23 @@ describe('OpenAIProvider', () => {
   describe('formatAssistantMessage', () => {
     it('formats content only', () => {
       expect(provider.formatAssistantMessage('Hello', [])).toEqual({
-        role: 'assistant', content: 'Hello', tool_calls: undefined,
+        role: 'assistant',
+        content: 'Hello',
+        tool_calls: undefined,
       });
     });
 
     it('formats with tool calls', () => {
-      const result = provider.formatAssistantMessage('', [{
-        id: 'call_1', name: 'greet', arguments: '{"name":"World"}',
-      }]) as any;
+      const result = provider.formatAssistantMessage('', [
+        {
+          id: 'call_1',
+          name: 'greet',
+          arguments: '{"name":"World"}',
+        },
+      ]) as any;
       expect(result.tool_calls[0]).toEqual({
-        id: 'call_1', type: 'function',
+        id: 'call_1',
+        type: 'function',
         function: { name: 'greet', arguments: '{"name":"World"}' },
       });
     });
@@ -178,9 +245,7 @@ describe('OpenAIProvider', () => {
 
   describe('formatToolResults', () => {
     it('formats results as tool messages', () => {
-      const results = provider.formatToolResults([
-        { id: 'call_1', name: 'greet', result: 'Hello, World!' },
-      ]);
+      const results = provider.formatToolResults([{ id: 'call_1', name: 'greet', result: 'Hello, World!' }]);
       expect(results).toEqual([{ role: 'tool', tool_call_id: 'call_1', content: 'Hello, World!' }]);
     });
   });
@@ -200,12 +265,16 @@ describe('OpenAIProvider', () => {
     it('parses non-streaming response with tool calls', async () => {
       const response = {
         json: async () => ({
-          choices: [{
-            message: {
-              content: '',
-              tool_calls: [{ id: 'call_1', type: 'function', function: { name: 'greet', arguments: '{"name":"World"}' } }],
+          choices: [
+            {
+              message: {
+                content: '',
+                tool_calls: [
+                  { id: 'call_1', type: 'function', function: { name: 'greet', arguments: '{"name":"World"}' } },
+                ],
+              },
             },
-          }],
+          ],
         }),
         body: null,
       } as unknown as Response;

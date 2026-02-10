@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createTooledPrompt } from '../factory.js';
-import { tool, getToolMetadata } from '../tool.js';
+import { tool } from '../tool.js';
 
 /**
  * Integration tests
@@ -30,7 +30,7 @@ describe('integration', () => {
     toolCalls?: Array<{
       id: string;
       function: { name: string; arguments: string };
-    }>
+    }>,
   ) {
     return {
       ok: true,
@@ -98,7 +98,8 @@ describe('integration', () => {
   describe('tool arguments are passed in correct order', () => {
     it('preserves argument order based on parameter names', async () => {
       const { prompt } = createTooledPrompt({
-        apiKey: 'test', silent: true,
+        apiKey: 'test',
+        silent: true,
       });
 
       const calls: Array<{ first: string; second: string; third: string }> = [];
@@ -121,7 +122,7 @@ describe('integration', () => {
               arguments: '{"third":"C","first":"A","second":"B"}',
             },
           },
-        ])
+        ]),
       );
       mockFetch.mockResolvedValueOnce(mockLLMResponse('Complete'));
 
@@ -134,7 +135,8 @@ describe('integration', () => {
 
     it('handles missing optional arguments', async () => {
       const { prompt } = createTooledPrompt({
-        apiKey: 'test', silent: true,
+        apiKey: 'test',
+        silent: true,
       });
 
       const calls: Array<{ required: string; optional: string | undefined }> = [];
@@ -155,7 +157,7 @@ describe('integration', () => {
               arguments: '{"required":"value"}', // optional not provided
             },
           },
-        ])
+        ]),
       );
       mockFetch.mockResolvedValueOnce(mockLLMResponse('Done'));
 
@@ -170,7 +172,8 @@ describe('integration', () => {
   describe('event handlers receive events during execution', () => {
     it('content handler receives LLM output', async () => {
       const { prompt, on } = createTooledPrompt({
-        apiKey: 'test', silent: true,
+        apiKey: 'test',
+        silent: true,
       });
 
       const contentChunks: string[] = [];
@@ -185,16 +188,15 @@ describe('integration', () => {
 
     it('tool_call and tool_result handlers fire during tool execution', async () => {
       const { prompt, on } = createTooledPrompt({
-        apiKey: 'test', silent: true,
+        apiKey: 'test',
+        silent: true,
       });
 
       const toolCalls: Array<{ name: string; args: unknown }> = [];
       const toolResults: Array<{ name: string; result: unknown; duration: number }> = [];
 
       on('tool_call', (name, args) => toolCalls.push({ name, args }));
-      on('tool_result', (name, result, duration) =>
-        toolResults.push({ name, result, duration })
-      );
+      on('tool_result', (name, result, duration) => toolResults.push({ name, result, duration }));
 
       function echo(message: string) {
         return message.toUpperCase();
@@ -202,9 +204,7 @@ describe('integration', () => {
       const echoTool = tool(echo, { args: ['Message to echo'] });
 
       mockFetch.mockResolvedValueOnce(
-        mockLLMResponse('', [
-          { id: 'call1', function: { name: 'echo', arguments: '{"message":"hello"}' } },
-        ])
+        mockLLMResponse('', [{ id: 'call1', function: { name: 'echo', arguments: '{"message":"hello"}' } }]),
       );
       mockFetch.mockResolvedValueOnce(mockLLMResponse('Done'));
 
@@ -221,7 +221,8 @@ describe('integration', () => {
 
     it('tool_error handler fires on tool failure', async () => {
       const { prompt, on } = createTooledPrompt({
-        apiKey: 'test', silent: true,
+        apiKey: 'test',
+        silent: true,
       });
 
       const errors: Array<{ name: string; error: string }> = [];
@@ -233,9 +234,7 @@ describe('integration', () => {
       const failingTool = tool(failing);
 
       mockFetch.mockResolvedValueOnce(
-        mockLLMResponse('', [
-          { id: 'call1', function: { name: 'failing', arguments: '{}' } },
-        ])
+        mockLLMResponse('', [{ id: 'call1', function: { name: 'failing', arguments: '{}' } }]),
       );
       mockFetch.mockResolvedValueOnce(mockLLMResponse('Handled error'));
 
@@ -247,7 +246,8 @@ describe('integration', () => {
 
     it('off() removes event handlers', async () => {
       const { prompt, on, off } = createTooledPrompt({
-        apiKey: 'test', silent: true,
+        apiKey: 'test',
+        silent: true,
       });
 
       const contentChunks: string[] = [];
@@ -284,7 +284,7 @@ describe('integration', () => {
           headers: expect.objectContaining({
             Authorization: 'Bearer custom-key',
           }),
-        })
+        }),
       );
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
@@ -311,7 +311,9 @@ describe('integration', () => {
 
     it('per-call config overrides instance config', async () => {
       const { prompt, setConfig } = createTooledPrompt({
-        modelName: 'instance-model', temperature: 0.5, silent: true,
+        modelName: 'instance-model',
+        temperature: 0.5,
+        silent: true,
       });
 
       setConfig({ temperature: 0.7 });
@@ -329,11 +331,12 @@ describe('integration', () => {
   describe('prompt template with tools', () => {
     it('includes tools in request when embedded in template', async () => {
       const { prompt } = createTooledPrompt({
-        apiKey: 'test', silent: true,
+        apiKey: 'test',
+        silent: true,
       });
 
       // Use a unique function definition to avoid any naming collision
-      function fetchFileContents(path: string) {
+      function fetchFileContents(_path: string) {
         return 'file contents';
       }
       const fileTool = tool(fetchFileContents, { args: ['File path'] });
@@ -350,7 +353,8 @@ describe('integration', () => {
 
     it('auto-wraps plain functions as tools', async () => {
       const { prompt } = createTooledPrompt({
-        apiKey: 'test', silent: true,
+        apiKey: 'test',
+        silent: true,
       });
 
       // Suppress console.warn for auto-wrapped function

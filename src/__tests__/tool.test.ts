@@ -108,7 +108,10 @@ describe('tool', () => {
         return `${query}:${limit}`;
       }
       const wrapped = tool(search, {
-        args: [['query', 'Search term'], ['limit', 'Max results']],
+        args: [
+          ['query', 'Search term'],
+          ['limit', 'Max results'],
+        ],
       });
       const metadata = getToolMetadata(wrapped);
       expect(metadata.parameters.properties.query.description).toBe('Search term');
@@ -122,7 +125,10 @@ describe('tool', () => {
         return `${query}:${limit}`;
       }
       const wrapped = tool(search, {
-        args: [['query', 'Search term'], ['limit', 'Max results (optional)']],
+        args: [
+          ['query', 'Search term'],
+          ['limit', 'Max results (optional)'],
+        ],
       });
       const metadata = getToolMetadata(wrapped);
       expect(metadata.parameters.required).toContain('query');
@@ -136,10 +142,12 @@ describe('tool', () => {
         return data;
       }
       const wrapped = tool(takesObject, {
-        args: [z.object({
-          name: z.string().describe('User name'),
-          email: z.string().describe('User email'),
-        })],
+        args: [
+          z.object({
+            name: z.string().describe('User name'),
+            email: z.string().describe('User email'),
+          }),
+        ],
       });
       const metadata = getToolMetadata(wrapped);
       expect(metadata.parameters.properties.data).toBeDefined();

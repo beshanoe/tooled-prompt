@@ -39,16 +39,28 @@ describe('AnthropicProvider', () => {
   describe('buildRequest', () => {
     it('builds correct URL', () => {
       const { url } = provider.buildRequest({
-        apiUrl: 'https://api.anthropic.com/v1', apiKey: 'sk-ant-test', modelName: 'claude-3-opus',
-        messages: [], tools: [], stream: false, temperature: undefined, maxTokens: undefined,
+        apiUrl: 'https://api.anthropic.com/v1',
+        apiKey: 'sk-ant-test',
+        modelName: 'claude-3-opus',
+        messages: [],
+        tools: [],
+        stream: false,
+        temperature: undefined,
+        maxTokens: undefined,
       });
       expect(url).toBe('https://api.anthropic.com/v1/messages');
     });
 
     it('uses x-api-key header', () => {
       const { headers } = provider.buildRequest({
-        apiUrl: 'https://api.anthropic.com/v1', apiKey: 'sk-ant-test', modelName: 'claude-3-opus',
-        messages: [], tools: [], stream: false, temperature: undefined, maxTokens: undefined,
+        apiUrl: 'https://api.anthropic.com/v1',
+        apiKey: 'sk-ant-test',
+        modelName: 'claude-3-opus',
+        messages: [],
+        tools: [],
+        stream: false,
+        temperature: undefined,
+        maxTokens: undefined,
       });
       expect(headers['x-api-key']).toBe('sk-ant-test');
       expect(headers['anthropic-version']).toBe('2023-06-01');
@@ -57,24 +69,42 @@ describe('AnthropicProvider', () => {
 
     it('defaults max_tokens to 4096', () => {
       const { body } = provider.buildRequest({
-        apiUrl: 'https://api.anthropic.com/v1', apiKey: undefined, modelName: 'claude-3-opus',
-        messages: [], tools: [], stream: false, temperature: undefined, maxTokens: undefined,
+        apiUrl: 'https://api.anthropic.com/v1',
+        apiKey: undefined,
+        modelName: 'claude-3-opus',
+        messages: [],
+        tools: [],
+        stream: false,
+        temperature: undefined,
+        maxTokens: undefined,
       });
       expect(body.max_tokens).toBe(4096);
     });
 
     it('uses provided maxTokens', () => {
       const { body } = provider.buildRequest({
-        apiUrl: 'https://api.anthropic.com/v1', apiKey: undefined, modelName: 'claude-3-opus',
-        messages: [], tools: [], stream: false, temperature: undefined, maxTokens: 8192,
+        apiUrl: 'https://api.anthropic.com/v1',
+        apiKey: undefined,
+        modelName: 'claude-3-opus',
+        messages: [],
+        tools: [],
+        stream: false,
+        temperature: undefined,
+        maxTokens: 8192,
       });
       expect(body.max_tokens).toBe(8192);
     });
 
     it('formats tools in Anthropic format (no type wrapper)', () => {
       const { body } = provider.buildRequest({
-        apiUrl: 'https://api.anthropic.com/v1', apiKey: undefined, modelName: 'claude-3-opus',
-        messages: [], tools: [sampleTool], stream: false, temperature: undefined, maxTokens: undefined,
+        apiUrl: 'https://api.anthropic.com/v1',
+        apiKey: undefined,
+        modelName: 'claude-3-opus',
+        messages: [],
+        tools: [sampleTool],
+        stream: false,
+        temperature: undefined,
+        maxTokens: undefined,
       });
       expect((body.tools as any[])[0]).toEqual({
         name: 'greet',
@@ -85,9 +115,15 @@ describe('AnthropicProvider', () => {
 
     it('places system prompt in system field', () => {
       const { body } = provider.buildRequest({
-        apiUrl: 'https://api.anthropic.com/v1', apiKey: undefined, modelName: 'claude-3-opus',
-        messages: [{ role: 'user', content: 'Hello' }], tools: [], stream: false,
-        temperature: undefined, maxTokens: undefined, systemPrompt: 'You are helpful.',
+        apiUrl: 'https://api.anthropic.com/v1',
+        apiKey: undefined,
+        modelName: 'claude-3-opus',
+        messages: [{ role: 'user', content: 'Hello' }],
+        tools: [],
+        stream: false,
+        temperature: undefined,
+        maxTokens: undefined,
+        systemPrompt: 'You are helpful.',
       });
       expect(body.system).toBe('You are helpful.');
       const messages = body.messages as any[];
@@ -96,8 +132,14 @@ describe('AnthropicProvider', () => {
 
     it('includes stream flag', () => {
       const { body } = provider.buildRequest({
-        apiUrl: 'https://api.anthropic.com/v1', apiKey: undefined, modelName: 'claude-3-opus',
-        messages: [], tools: [], stream: true, temperature: undefined, maxTokens: undefined,
+        apiUrl: 'https://api.anthropic.com/v1',
+        apiKey: undefined,
+        modelName: 'claude-3-opus',
+        messages: [],
+        tools: [],
+        stream: true,
+        temperature: undefined,
+        maxTokens: undefined,
       });
       expect(body.stream).toBe(true);
     });
@@ -105,8 +147,14 @@ describe('AnthropicProvider', () => {
     it('includes output_config when schema provided', () => {
       const schema = { type: 'object', properties: { name: { type: 'string' } } };
       const { body } = provider.buildRequest({
-        apiUrl: 'https://api.anthropic.com/v1', apiKey: undefined, modelName: 'claude-3-opus',
-        messages: [], tools: [], stream: false, temperature: undefined, maxTokens: undefined,
+        apiUrl: 'https://api.anthropic.com/v1',
+        apiKey: undefined,
+        modelName: 'claude-3-opus',
+        messages: [],
+        tools: [],
+        stream: false,
+        temperature: undefined,
+        maxTokens: undefined,
         schema: { jsonSchema: schema },
       });
       expect(body.output_config).toEqual({
@@ -116,8 +164,14 @@ describe('AnthropicProvider', () => {
 
     it('omits output_config when no schema', () => {
       const { body } = provider.buildRequest({
-        apiUrl: 'https://api.anthropic.com/v1', apiKey: undefined, modelName: 'claude-3-opus',
-        messages: [], tools: [], stream: false, temperature: undefined, maxTokens: undefined,
+        apiUrl: 'https://api.anthropic.com/v1',
+        apiKey: undefined,
+        modelName: 'claude-3-opus',
+        messages: [],
+        tools: [],
+        stream: false,
+        temperature: undefined,
+        maxTokens: undefined,
       });
       expect(body.output_config).toBeUndefined();
     });
@@ -125,8 +179,14 @@ describe('AnthropicProvider', () => {
     it('includes both output_config and tools when both provided', () => {
       const schema = { type: 'object', properties: { result: { type: 'string' } } };
       const { body } = provider.buildRequest({
-        apiUrl: 'https://api.anthropic.com/v1', apiKey: undefined, modelName: 'claude-3-opus',
-        messages: [], tools: [sampleTool], stream: false, temperature: undefined, maxTokens: undefined,
+        apiUrl: 'https://api.anthropic.com/v1',
+        apiKey: undefined,
+        modelName: 'claude-3-opus',
+        messages: [],
+        tools: [sampleTool],
+        stream: false,
+        temperature: undefined,
+        maxTokens: undefined,
         schema: { jsonSchema: schema },
       });
       expect(body.output_config).toBeDefined();
@@ -154,8 +214,14 @@ describe('AnthropicProvider', () => {
         },
       };
       const { body } = provider.buildRequest({
-        apiUrl: 'https://api.anthropic.com/v1', apiKey: undefined, modelName: 'claude-3-opus',
-        messages: [], tools: [], stream: false, temperature: undefined, maxTokens: undefined,
+        apiUrl: 'https://api.anthropic.com/v1',
+        apiKey: undefined,
+        modelName: 'claude-3-opus',
+        messages: [],
+        tools: [],
+        stream: false,
+        temperature: undefined,
+        maxTokens: undefined,
         schema: { jsonSchema: schema },
       });
       const outputSchema = (body.output_config as any).format.schema;
@@ -189,9 +255,7 @@ describe('AnthropicProvider', () => {
     });
 
     it('prepends system images converted to Anthropic format', () => {
-      const images: ContentPart[] = [
-        { type: 'image_url', image_url: { url: 'data:image/png;base64,SYS_IMG' } },
-      ];
+      const images: ContentPart[] = [{ type: 'image_url', image_url: { url: 'data:image/png;base64,SYS_IMG' } }];
       const result = provider.formatUserMessage('Hello', images) as any;
       expect(result.content).toHaveLength(2);
       expect(result.content[0]).toEqual({
@@ -212,12 +276,19 @@ describe('AnthropicProvider', () => {
     });
 
     it('formats tool calls as tool_use blocks', () => {
-      const result = provider.formatAssistantMessage('', [{
-        id: 'toolu_1', name: 'greet', arguments: '{"name":"World"}',
-      }]) as any;
+      const result = provider.formatAssistantMessage('', [
+        {
+          id: 'toolu_1',
+          name: 'greet',
+          arguments: '{"name":"World"}',
+        },
+      ]) as any;
       expect(result.content).toHaveLength(1);
       expect(result.content[0]).toEqual({
-        type: 'tool_use', id: 'toolu_1', name: 'greet', input: { name: 'World' },
+        type: 'tool_use',
+        id: 'toolu_1',
+        name: 'greet',
+        input: { name: 'World' },
       });
     });
   });
@@ -264,7 +335,9 @@ describe('AnthropicProvider', () => {
       expect(result.content).toBe('Let me greet.');
       expect(result.toolCalls).toHaveLength(1);
       expect(result.toolCalls[0]).toEqual({
-        id: 'toolu_1', name: 'greet', arguments: '{"name":"World"}',
+        id: 'toolu_1',
+        name: 'greet',
+        arguments: '{"name":"World"}',
       });
     });
 
