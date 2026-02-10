@@ -1,4 +1,4 @@
-name: Sync Version and Publish
+name: Version bump
 on:
   release:
     types: [published]
@@ -25,15 +25,15 @@ jobs:
         run: |
           # Extract version from tag (e.g., v1.0.5 -> 1.0.5)
           CLEAN_VERSION=$(echo "${{ github.event.release.tag_name }}" | sed 's/^v//')
-          
+
           # Set git identity
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
+
           # Bump version without creating a new git tag (since the tag already exists)
           npm version $CLEAN_VERSION --no-git-tag-version
-          
+
           # Commit and push the change back to the main branch
           git add package.json
           git commit -m "chore: bump version to $CLEAN_VERSION [skip ci]"
-          git push
+          git push origin HEAD:main
