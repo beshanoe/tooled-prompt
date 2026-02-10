@@ -288,11 +288,22 @@ export interface ExecutionResult {
 }
 
 /**
+ * Tagged template function for creating prompts.
+ * Used for both `prompt` and `next` (conversation continuation).
+ */
+export type PromptTaggedTemplate = ((strings: TemplateStringsArray, ...values: unknown[]) => PromptExecutor) & {
+  /** Sentinel value — use in template to capture structured output via a store tool */
+  readonly return: object;
+};
+
+/**
  * Wrapper for prompt execution results.
  * Provides an extensible envelope that will later include tool usage stats and other metadata.
  */
 export interface PromptResult<T> {
   data?: T;
+  /** Continue the conversation with a follow-up prompt, preserving history and tools */
+  next: PromptTaggedTemplate;
 }
 
 /**
@@ -313,10 +324,7 @@ export interface PromptExecutor {
  */
 export interface TooledPromptInstance {
   /** Tagged template for creating prompts, with `.return` sentinel for structured output */
-  prompt: ((strings: TemplateStringsArray, ...values: unknown[]) => PromptExecutor) & {
-    /** Sentinel value — use in template to capture structured output via a store tool */
-    readonly return: object;
-  };
+  prompt: PromptTaggedTemplate;
   /** Tool wrapper function */
   tool: typeof import('./tool.js').tool;
   /** Update the instance configuration */

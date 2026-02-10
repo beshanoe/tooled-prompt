@@ -138,7 +138,7 @@ describe('runToolLoop', () => {
   it('returns LLM response when no tool calls', async () => {
     mockFetch.mockResolvedValue(mockLLMResponse('Hello, world!'));
 
-    const result = await runToolLoop('Say hello', [], defaultConfig, emitter);
+    const { result } = await runToolLoop('Say hello', [], defaultConfig, emitter);
 
     expect(result).toBe('Hello, world!');
     expect(mockFetch).toHaveBeenCalledOnce();
@@ -196,7 +196,7 @@ describe('runToolLoop', () => {
     // Second call: LLM returns final response
     mockFetch.mockResolvedValueOnce(mockLLMResponse('I greeted World!'));
 
-    const result = await runToolLoop('Greet World', [greetTool], defaultConfig, emitter);
+    const { result } = await runToolLoop('Greet World', [greetTool], defaultConfig, emitter);
 
     expect(greet).toHaveBeenCalledWith('World');
     expect(result).toBe('I greeted World!');
@@ -223,7 +223,7 @@ describe('runToolLoop', () => {
     // Third call: LLM returns final response
     mockFetch.mockResolvedValueOnce(mockLLMResponse('Results: 3 and 7'));
 
-    const result = await runToolLoop('Add 1+2 then 3+4', [addTool], defaultConfig, emitter);
+    const { result } = await runToolLoop('Add 1+2 then 3+4', [addTool], defaultConfig, emitter);
 
     expect(add).toHaveBeenCalledTimes(2);
     expect(add).toHaveBeenNthCalledWith(1, 1, 2);
@@ -259,7 +259,7 @@ describe('runToolLoop', () => {
       mockLLMResponse('{"name":"John","age":30}')
     );
 
-    const result = await runToolLoop(
+    const { result } = await runToolLoop(
       'Get user',
       [],
       defaultConfig,
@@ -312,7 +312,7 @@ describe('runToolLoop', () => {
     const errorHandler = vi.fn();
     emitter.on('tool_error', errorHandler);
 
-    const result = await runToolLoop('Try to fail', [failingTool], defaultConfig, emitter);
+    const { result } = await runToolLoop('Try to fail', [failingTool], defaultConfig, emitter);
 
     expect(errorHandler).toHaveBeenCalledWith('fail', 'Tool error!');
     expect(result).toBe('Tool failed');
@@ -368,7 +368,7 @@ describe('runToolLoop', () => {
 
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-    const result = await runToolLoop('Use unknown', [], defaultConfig, emitter);
+    const { result } = await runToolLoop('Use unknown', [], defaultConfig, emitter);
 
     expect(warnSpy).toHaveBeenCalledWith('Unknown tool: unknownTool');
     expect(result).toBe('Unknown tool error');
@@ -391,7 +391,7 @@ describe('runToolLoop', () => {
     const errorHandler = vi.fn();
     emitter.on('tool_error', errorHandler);
 
-    const result = await runToolLoop('Test', [myTool], defaultConfig, emitter);
+    const { result } = await runToolLoop('Test', [myTool], defaultConfig, emitter);
 
     expect(errorHandler).toHaveBeenCalledWith('test', expect.stringContaining('Invalid JSON'));
     expect(result).toBe('Recovered');
@@ -443,7 +443,7 @@ describe('runToolLoop', () => {
     );
     mockFetch.mockResolvedValueOnce(mockLLMResponse('Done'));
 
-    const result = await runToolLoop('Do nothing', [voidTool], defaultConfig, emitter);
+    const { result } = await runToolLoop('Do nothing', [voidTool], defaultConfig, emitter);
 
     // Verify second call includes "OK" as result
     const secondCall = mockFetch.mock.calls[1];
@@ -606,6 +606,51 @@ describe('runToolLoop', () => {
     });
   });
 
+  it('returns messages including final assistant message', async () => {
+    mockFetch.mockResolvedValue(mockLLMResponse('Hello!'));
+
+    const { messages } = await runToolLoop('Hi', [], defaultConfig, emitter);
+
+    // messages: [user, assistant]
+    expect(messages).toHaveLength(2);
+    expect((messages[0] as any).role).toBe('user');
+    expect((messages[1] as any).role).toBe('assistant');
+    expect((messages[1] as any).content).toBe('Hello!');
+  });
+
+  it('prepends history when provided', async () => {
+    mockFetch.mockResolvedValue(mockLLMResponse('Follow up response'));
+
+    const history = [
+      { role: 'user', content: 'First message' },
+      { role: 'assistant', content: 'First response' },
+    ];
+
+    const { result, messages } = await runToolLoop(
+      'Follow up',
+      [],
+      defaultConfig,
+      emitter,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      history,
+    );
+
+    expect(result).toBe('Follow up response');
+
+    // Verify API received history + new user message
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.messages).toHaveLength(3);
+    expect(body.messages[0]).toEqual({ role: 'user', content: 'First message' });
+    expect(body.messages[1]).toEqual({ role: 'assistant', content: 'First response' });
+    expect(body.messages[2].role).toBe('user');
+
+    // Returned messages include everything + final assistant
+    expect(messages).toHaveLength(4);
+  });
+
   describe('streaming responses', () => {
     function createMockStream(chunks: string[]) {
       const encoder = new TextEncoder();
@@ -640,7 +685,7 @@ describe('runToolLoop', () => {
       const contentHandler = vi.fn();
       emitter.on('content', contentHandler);
 
-      const result = await runToolLoop('Test', [], streamConfig, emitter);
+      const { result } = await runToolLoop('Test', [], streamConfig, emitter);
 
       expect(result).toBe('Hello World');
       expect(contentHandler).toHaveBeenCalledWith('Hello');
@@ -671,7 +716,7 @@ describe('runToolLoop', () => {
         ])
       );
 
-      const result = await runToolLoop('Echo hi', [echoTool], streamConfig, emitter);
+      const { result } = await runToolLoop('Echo hi', [echoTool], streamConfig, emitter);
 
       expect(echo).toHaveBeenCalledWith('hi');
       expect(result).toBe('Done');

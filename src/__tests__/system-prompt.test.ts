@@ -216,6 +216,32 @@ describe('systemPrompt', () => {
     });
   });
 
+  describe('system prompt in next continuations', () => {
+    it('sends system prompt on the second turn via next', async () => {
+      const { prompt } = createTooledPrompt({
+        apiKey: 'test',
+        silent: true,
+        systemPrompt: 'You are a helpful assistant.',
+      });
+
+      // First turn
+      mockFetch.mockResolvedValueOnce(mockLLMResponse('First response'));
+      const result1 = await prompt`Hello`();
+      const { next } = result1;
+
+      // Second turn via next
+      mockFetch.mockResolvedValueOnce(mockLLMResponse('Second response'));
+      await next`Follow up`();
+
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+
+      const secondBody = JSON.parse(mockFetch.mock.calls[1][1].body);
+      const messages = secondBody.messages;
+      // System message should be present on the second turn
+      expect(messages[0]).toEqual({ role: 'system', content: 'You are a helpful assistant.' });
+    });
+  });
+
   describe('config validation', () => {
     it('validates maxTokens is positive integer', () => {
       expect(() => createTooledPrompt({ maxTokens: 0 })).toThrow('maxTokens must be a positive integer');

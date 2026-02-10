@@ -25,6 +25,7 @@ Runtime LLM prompt library with smart tool recognition for TypeScript.
   - [Multiple Prompt Instances](#multiple-prompt-instances)
   - [Providers](#providers)
   - [System Prompt](#system-prompt)
+  - [Multi-Turn Conversations](#multi-turn-conversations)
 - [API Reference](#api-reference)
 - [License](#license)
 
@@ -393,6 +394,18 @@ const { prompt } = createTooledPrompt({
 });
 ```
 
+### Multi-Turn Conversations
+
+Every `PromptResult` includes a `next` tagged template for continuing the conversation. History and tools carry over automatically, and the system prompt is preserved across turns:
+
+```typescript
+const { data, next } = await prompt`Summarize this file: ${readFile}`();
+
+const { data: followUp, next: next2 } = await next`What are the main concerns?`();
+
+const { data: deeper } = await next2`Elaborate on the first concern`();
+```
+
 ## API Reference
 
 ### `prompt`
@@ -523,7 +536,9 @@ All prompt executions return a `PromptResult<T>` wrapper:
 
 ```typescript
 interface PromptResult<T> {
-  data: T;
+  data?: T;
+  /** Continue the conversation with a follow-up prompt, preserving history and tools */
+  next: PromptTaggedTemplate;
 }
 ```
 

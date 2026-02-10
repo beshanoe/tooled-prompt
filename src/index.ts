@@ -54,6 +54,7 @@ export type {
   ResolvedSchema,
   PromptResult,
   PromptExecutor,
+  PromptTaggedTemplate,
   TooledPromptInstance,
   TooledPromptEvents,
   ContentPart,

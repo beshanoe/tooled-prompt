@@ -26,6 +26,8 @@ function formatLabel(text: string, kind: "thinking" | "response"): string {
  * Event types emitted during prompt execution
  */
 export interface TooledPromptEvents {
+  /** Emitted at the start of each prompt execution */
+  start: () => void;
   /** Thinking/reasoning content from the LLM */
   thinking: (content: string) => void;
   /** Response content from the LLM */
@@ -193,6 +195,11 @@ export function installDefaultHandlers(
   const showThinking = options?.showThinking ?? (() => false);
   let inThinking = false;
   let hasContent = false;
+
+  target.on("start", () => {
+    inThinking = false;
+    hasContent = false;
+  });
 
   target.on("thinking", (content) => {
     if (!inThinking) {
