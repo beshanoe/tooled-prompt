@@ -2,6 +2,7 @@ name: Version bump
 on:
   release:
     types: [published]
+  workflow_dispatch:
 
 jobs:
   publish:
@@ -24,7 +25,11 @@ jobs:
       - name: Update package.json version
         run: |
           # Extract version from tag (e.g., v1.0.5 -> 1.0.5)
-          CLEAN_VERSION=$(echo "${{ github.event.release.tag_name }}" | sed 's/^v//')
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            CLEAN_VERSION=$(echo "${{ github.ref_name }}" | sed 's/^v//')
+          else
+            CLEAN_VERSION=$(echo "${{ github.event.release.tag_name }}" | sed 's/^v//')
+          fi
 
           # Set git identity
           git config --global user.name "github-actions[bot]"
