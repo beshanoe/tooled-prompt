@@ -31,6 +31,7 @@ export interface ParsedFunction {
  * - Methods: foo(a, b) {}
  * - TypeScript typed params: (a: string, b?: number) => {}
  */
+// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
 export function parseFunction(fn: Function): ParsedFunction {
   const name = fn.name || 'anonymous';
   const str = fn.toString();
@@ -62,7 +63,7 @@ export function parseFunction(fn: Function): ParsedFunction {
 
       // Strip type annotations: "name: string" → "name", "name?: string" → "name?"
       // Strip default values: "name = 'default'" → "name"
-      let paramName = p.split(':')[0].split('=')[0].trim();
+      const paramName = p.split(':')[0].split('=')[0].trim();
 
       // At runtime, TypeScript's `?` is usually stripped, but check anyway
       const hasTsOptional = paramName.endsWith('?');

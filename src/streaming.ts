@@ -6,9 +6,7 @@
  * Parse SSE stream and yield chunks.
  * Shared utility used by OpenAI and Anthropic providers.
  */
-export async function* parseSSEStream(
-  reader: ReadableStreamDefaultReader<Uint8Array>
-): AsyncGenerator<any> {
+export async function* parseSSEStream(reader: ReadableStreamDefaultReader<Uint8Array>): AsyncGenerator<any> {
   const decoder = new TextDecoder();
   let buffer = '';
 

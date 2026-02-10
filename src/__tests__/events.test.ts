@@ -136,11 +136,10 @@ describe('TooledPromptEmitter', () => {
 });
 
 describe('default handlers', () => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let stdoutWriteSpy: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   let consoleLogSpy: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   let consoleErrorSpy: any;
 
   beforeEach(() => {

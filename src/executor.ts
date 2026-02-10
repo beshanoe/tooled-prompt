@@ -5,12 +5,20 @@
  * Delegates provider-specific logic to ProviderAdapter implementations.
  */
 
-import { TOOL_SYMBOL, type ToolFunction, type ToolMetadata, type ResolvedTooledPromptConfig, type ContentPart, type PromptContent, type ResolvedSchema } from './types.js';
+import {
+  TOOL_SYMBOL,
+  type ToolFunction,
+  type ToolMetadata,
+  type ResolvedTooledPromptConfig,
+  type ContentPart,
+  type PromptContent,
+  type ResolvedSchema,
+} from './types.js';
 import type { TooledPromptEmitter } from './events.js';
 import type { Store } from './store.js';
 import { isImageMarker } from './image.js';
 import { getProvider } from './providers/index.js';
-import type { ToolCallInfo, ToolResultInfo } from './providers/types.js';
+import type { ToolResultInfo } from './providers/types.js';
 
 // Re-export parseSSEStream for backward compatibility
 export { parseSSEStream } from './streaming.js';
@@ -181,13 +189,10 @@ export async function runToolLoop<T = string>(
 ): Promise<{ result: T; messages: unknown[] }> {
   emitter.emit('start');
   const provider = getProvider(config.provider);
-  const toolMeta: ToolMetadata[] = tools.map(t => t[TOOL_SYMBOL]);
+  const toolMeta: ToolMetadata[] = tools.map((t) => t[TOOL_SYMBOL]);
 
   // Build messages: prepend history, then add new user message
-  const messages: unknown[] = [
-    ...(history || []),
-    provider.formatUserMessage(promptText, systemImages),
-  ];
+  const messages: unknown[] = [...(history || []), provider.formatUserMessage(promptText, systemImages)];
 
   // Config is already resolved - use values directly
   const { apiUrl, modelName, apiKey, maxIterations, stream: useStreaming, timeout } = config;
@@ -234,11 +239,7 @@ export async function runToolLoop<T = string>(
       throw new Error(`LLM request failed (${response.status}): ${text}`);
     }
 
-    const { content, toolCalls: rawToolCalls } = await provider.parseResponse(
-      response,
-      useStreaming,
-      emitter,
-    );
+    const { content, toolCalls: rawToolCalls } = await provider.parseResponse(response, useStreaming, emitter);
 
     // Filter out incomplete tool calls
     const toolCalls = rawToolCalls.filter((tc) => tc.id && tc.name);
@@ -254,16 +255,14 @@ export async function runToolLoop<T = string>(
         try {
           parsed = JSON.parse(content);
         } catch (err) {
-          throw new Error(
-            `Failed to parse JSON response: ${(err as Error).message}\n\nRaw content:\n${content}`
-          );
+          throw new Error(`Failed to parse JSON response: ${(err as Error).message}\n\nRaw content:\n${content}`);
         }
 
         try {
           return { result: schema.parse(parsed) as T, messages };
         } catch (err) {
           throw new Error(
-            `Schema validation failed: ${(err as Error).message}\n\nParsed JSON:\n${JSON.stringify(parsed, null, 2)}`
+            `Schema validation failed: ${(err as Error).message}\n\nParsed JSON:\n${JSON.stringify(parsed, null, 2)}`,
           );
         }
       }
@@ -332,8 +331,7 @@ export async function runToolLoop<T = string>(
         // Truncate long results when maxToolResultLength is configured
         const truncated =
           config.maxToolResultLength && resultStr.length > config.maxToolResultLength
-            ? resultStr.slice(0, config.maxToolResultLength) +
-              `\n... (truncated, ${resultStr.length} total chars)`
+            ? resultStr.slice(0, config.maxToolResultLength) + `\n... (truncated, ${resultStr.length} total chars)`
             : resultStr;
 
         toolResults.push({

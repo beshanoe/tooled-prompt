@@ -43,7 +43,12 @@ function twoArgs(src: string, dest: string) {
 }
 tool(twoArgs); // ✓
 tool(twoArgs, { args: ['src', 'dest'] }); // ✓ string descriptors
-tool(twoArgs, { args: [['source', 'Source path'], ['dest', 'Dest path']] }); // ✓ tuple descriptors
+tool(twoArgs, {
+  args: [
+    ['source', 'Source path'],
+    ['dest', 'Dest path'],
+  ],
+}); // ✓ tuple descriptors
 tool(twoArgs, { args: [z.string(), z.string()] }); // ✓ zod descriptors
 tool(twoArgs, { args: ['Source path', z.string().describe('Destination')] }); // ✓ mixed
 tool(twoArgs, { args: [['src', 'Source path'], z.string()] }); // ✓ mixed tuple + zod
@@ -57,7 +62,7 @@ tool(twoArgs, { args: 'wrong' });
 tool(twoArgs, { args: { src: 'd', dest: 'd' } });
 
 // === 3 args ===
-function threeArgs(a: string, b: string, c: string) {
+function threeArgs(a: string, _b: string, _c: string) {
   return a;
 }
 tool(threeArgs, { args: ['a', 'b', 'c'] }); // ✓
@@ -110,7 +115,12 @@ function withDefault(name: string, unit = 'fahrenheit') {
 }
 tool(withDefault, { args: ['Name'] }); // ✓ - omit optional
 tool(withDefault, { args: ['Name', 'Unit'] }); // ✓ - provide both strings
-tool(withDefault, { args: [['name', 'Name'], ['unit', 'Unit']] }); // ✓ - provide both tuples
+tool(withDefault, {
+  args: [
+    ['name', 'Name'],
+    ['unit', 'Unit'],
+  ],
+}); // ✓ - provide both tuples
 tool(withDefault, { args: [z.string(), z.string()] }); // ✓ - provide both zod
 tool(withDefault, { args: ['Name', z.string()] }); // ✓ - mixed
 
@@ -138,7 +148,7 @@ import type { PromptResult } from '../types.js';
 {
   const res = await prompt`Hello`();
   // data should be string | undefined
-  const data: string | undefined = res.data;
+  const _data: string | undefined = res.data;
   // @ts-expect-error - data is string | undefined, not number
   const _bad: number = res.data;
 }
@@ -149,8 +159,8 @@ import type { PromptResult } from '../types.js';
   const res = await prompt`Get user`(UserSchema);
   // data should be { name: string; age: number } | undefined
   if (res.data) {
-    const name: string = res.data.name;
-    const age: number = res.data.age;
+    const _name: string = res.data.name;
+    const _age: number = res.data.age;
     // @ts-expect-error - age is number, not string
     const _badAge: string = res.data.age;
   }
@@ -161,11 +171,11 @@ import type { PromptResult } from '../types.js';
   const res = await prompt`Summarize`({ summary: 'The summary', 'detail?': 'Optional detail' });
   if (res.data) {
     // summary is required string
-    const summary: string = res.data.summary;
+    const _summary: string = res.data.summary;
     // detail is string (mapped from 'detail?')
-    const detail: string = res.data.detail;
+    const _detail: string = res.data.detail;
     // @ts-expect-error - no key 'detail?' on result (it's mapped to 'detail')
-    res.data['detail?'];
+    void res.data['detail?'];
     // @ts-expect-error - values are string, not number
     const _bad: number = res.data.summary;
   }
@@ -174,7 +184,7 @@ import type { PromptResult } from '../types.js';
 // --- Config-only: still returns PromptResult<string> ---
 {
   const res = await prompt`Hello`({ temperature: 0.5 });
-  const check: PromptResult<string> = res;
+  const _check: PromptResult<string> = res;
   // @ts-expect-error - data is string | undefined, not number
   const _bad: number = res.data;
 }

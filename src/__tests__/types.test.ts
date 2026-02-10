@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { isZodSchema, isSimpleSchema, simpleSchemaToJsonSchema, createSimpleSchemaParser, resolveSchema, TOOL_SYMBOL } from '../types.js';
+import {
+  isZodSchema,
+  isSimpleSchema,
+  simpleSchemaToJsonSchema,
+  createSimpleSchemaParser,
+  resolveSchema,
+  TOOL_SYMBOL,
+} from '../types.js';
 import { z } from 'zod';
 
 describe('isZodSchema', () => {

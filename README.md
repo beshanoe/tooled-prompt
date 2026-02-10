@@ -46,12 +46,12 @@ npm install tooled-prompt
 ## Quick Start
 
 ```typescript
-import { prompt, setConfig } from "tooled-prompt";
+import { prompt, setConfig } from 'tooled-prompt';
 
 setConfig({
-  apiUrl: "https://api.openai.com/v1",
+  apiUrl: 'https://api.openai.com/v1',
   apiKey: process.env.OPENAI_API_KEY,
-  modelName: "gpt-5-nano"
+  modelName: 'gpt-5-nano',
 });
 
 function getWeather(cityName: string) {
@@ -87,17 +87,17 @@ console.log(data);
 Functions in template literals are auto-detected as tools. Parameter names and optionality are inferred at runtime — no schema needed:
 
 ```typescript
-import { prompt, setConfig } from "tooled-prompt";
-import * as fs from "fs/promises";
+import { prompt, setConfig } from 'tooled-prompt';
+import * as fs from 'fs/promises';
 
 setConfig({
-  apiUrl: "https://api.openai.com/v1",
+  apiUrl: 'https://api.openai.com/v1',
   apiKey: process.env.OPENAI_API_KEY,
-  modelName: "gpt-5-nano"
+  modelName: 'gpt-5-nano',
 });
 
 async function readFile(filePath: string) {
-  return fs.readFile(filePath, "utf-8");
+  return fs.readFile(filePath, 'utf-8');
 }
 
 const { data } = await prompt`
@@ -110,9 +110,9 @@ const { data } = await prompt`
 Pass `Buffer` or `Uint8Array` values directly in templates. They are auto-detected and sent as base64 to vision-capable models:
 
 ```typescript
-import { readFileSync } from "fs";
+import { readFileSync } from 'fs';
 
-const image = readFileSync("photo.png");
+const image = readFileSync('photo.png');
 
 const { data } = await prompt`Describe this image: ${image}`();
 ```
@@ -120,8 +120,8 @@ const { data } = await prompt`Describe this image: ${image}`();
 Multiple images work too:
 
 ```typescript
-const before = readFileSync("before.png");
-const after = readFileSync("after.png");
+const before = readFileSync('before.png');
+const after = readFileSync('after.png');
 
 const { data } = await prompt`
   Compare these two images:
@@ -136,11 +136,11 @@ Embed multiple functions in a single template:
 
 ```typescript
 async function readDir() {
-  return fs.readdir("src", { recursive: true });
+  return fs.readdir('src', { recursive: true });
 }
 
 async function readFile(filePath: string) {
-  return fs.readFile(filePath, "utf-8");
+  return fs.readFile(filePath, 'utf-8');
 }
 
 const { data } = await prompt`
@@ -154,7 +154,7 @@ const { data } = await prompt`
 For LLMs that support structured output, pass a Zod schema to get typed, validated responses:
 
 ```typescript
-import { z } from "zod";
+import { z } from 'zod';
 
 const MovieSchema = z.object({
   title: z.string(),
@@ -174,8 +174,8 @@ Or use a `SimpleSchema` for string-only fields (no Zod required):
 
 ```typescript
 const { data } = await prompt`Analyze this text: ${text}`({
-  sentiment: "Overall sentiment (positive/negative/neutral)",
-  confidence: "Confidence score if available",
+  sentiment: 'Overall sentiment (positive/negative/neutral)',
+  confidence: 'Confidence score if available',
 });
 
 // data is typed as { sentiment: string; confidence: string }
@@ -188,7 +188,7 @@ const { data } = await prompt`Analyze this text: ${text}`({
 Some LLMs don't allow using both tools and structured output. When `prompt.return` appears in a template and a schema is passed, the LLM gets a special tool to store the result. The tool loop exits as soon as the value is stored:
 
 ```typescript
-import { z } from "zod";
+import { z } from 'zod';
 
 const schema = z.object({
   summary: z.string(),
@@ -213,8 +213,8 @@ console.log(data.summary);
 For manual control, create a store and retrieve the value after execution:
 
 ```typescript
-import { store } from "tooled-prompt";
-import { z } from "zod";
+import { store } from 'tooled-prompt';
+import { z } from 'zod';
 
 const changeLog = store(
   z.object({
@@ -243,33 +243,33 @@ For richer tool metadata, use `tool()` to add descriptions and explicit arg desc
 **Plain array descriptors:**
 
 ```typescript
-import { tool } from "tooled-prompt";
+import { tool } from 'tooled-prompt';
 
 function copyFile(src, dest) {
   fs.copyFileSync(src, dest);
 }
 
 tool(copyFile, {
-  description: "Copy a file from source to destination",
-  args: ["Source file path", "Destination file path"],
+  description: 'Copy a file from source to destination',
+  args: ['Source file path', 'Destination file path'],
 });
 ```
 
 **Zod descriptors** for rich types:
 
 ```typescript
-import { z } from "zod";
+import { z } from 'zod';
 
 function createUser(name, email, age) {
   // ...
 }
 
 tool(createUser, {
-  description: "Create a new user",
+  description: 'Create a new user',
   args: [
-    z.string().describe("User full name"),
-    z.string().describe("User email address"),
-    z.number().describe("User age"),
+    z.string().describe('User full name'),
+    z.string().describe('User email address'),
+    z.number().describe('User age'),
   ],
 });
 ```
@@ -300,29 +300,28 @@ await prompt`Find and read the config`({ tools: [readFile] });
 Create isolated instances for different LLM providers or models with `createTooledPrompt`:
 
 ```typescript
-import { createTooledPrompt } from "tooled-prompt";
+import { createTooledPrompt } from 'tooled-prompt';
 
 const openai = createTooledPrompt({
-  apiUrl: "https://api.openai.com/v1",
+  apiUrl: 'https://api.openai.com/v1',
   apiKey: process.env.OPENAI_API_KEY,
-  modelName: "gpt-4o",
+  modelName: 'gpt-4o',
 });
 
 const local = createTooledPrompt({
-  apiUrl: "http://localhost:11434/v1",
-  modelName: "llama3.1",
+  apiUrl: 'http://localhost:11434/v1',
+  modelName: 'llama3.1',
 });
 
 const { data: summary } = await openai.prompt`Summarize this document`();
-const { data: translation } =
-  await local.prompt`Translate to French: ${text}`();
+const { data: translation } = await local.prompt`Translate to French: ${text}`();
 ```
 
 Use different models for different tasks within one workflow:
 
 ```typescript
-const imageLlm = createTooledPrompt({ modelName: "gemma-3-27b-it" });
-const toolLlm = createTooledPrompt({ modelName: "gpt-4o" });
+const imageLlm = createTooledPrompt({ modelName: 'gemma-3-27b-it' });
+const toolLlm = createTooledPrompt({ modelName: 'gpt-4o' });
 
 async function describeImage(path: string) {
   const image = readFileSync(path);
@@ -341,39 +340,39 @@ const { data } = await toolLlm.prompt`
 Built-in support for OpenAI-compatible, Anthropic, and Ollama. Set the `provider` config to switch:
 
 ```typescript
-import { createTooledPrompt } from "tooled-prompt";
+import { createTooledPrompt } from 'tooled-prompt';
 
 // OpenAI-compatible (default)
 const openai = createTooledPrompt({
-  provider: "openai",
-  apiUrl: "https://api.openai.com/v1",
+  provider: 'openai',
+  apiUrl: 'https://api.openai.com/v1',
   apiKey: process.env.OPENAI_API_KEY,
-  modelName: "gpt-4o",
+  modelName: 'gpt-4o',
 });
 
 // Anthropic
 const anthropic = createTooledPrompt({
-  provider: "anthropic",
-  apiUrl: "https://api.anthropic.com/v1",
+  provider: 'anthropic',
+  apiUrl: 'https://api.anthropic.com/v1',
   apiKey: process.env.ANTHROPIC_API_KEY,
-  modelName: "claude-sonnet-4-5",
+  modelName: 'claude-sonnet-4-5',
   maxTokens: 8192,
 });
 
 // Ollama
 const ollama = createTooledPrompt({
-  provider: "ollama",
-  apiUrl: "http://localhost:11434",
-  modelName: "llama3.1",
+  provider: 'ollama',
+  apiUrl: 'http://localhost:11434',
+  modelName: 'llama3.1',
 });
 ```
 
 You can also register custom providers:
 
 ```typescript
-import { registerProvider } from "tooled-prompt";
+import { registerProvider } from 'tooled-prompt';
 
-registerProvider("my-provider", myProviderAdapter);
+registerProvider('my-provider', myProviderAdapter);
 ```
 
 ### System Prompt
@@ -383,7 +382,7 @@ Set a system prompt as a plain string or as a builder callback with tool referen
 ```typescript
 // Plain string
 const { prompt } = createTooledPrompt({
-  systemPrompt: "You are a helpful assistant.",
+  systemPrompt: 'You are a helpful assistant.',
 });
 
 // Builder callback — tools in the system prompt are available to the LLM
@@ -413,7 +412,7 @@ const { data: deeper } = await next2`Elaborate on the first concern`();
 Tagged template literal for creating LLM prompts (default instance). Functions in `${}` are auto-detected as tools.
 
 ```typescript
-import { prompt } from "tooled-prompt";
+import { prompt } from 'tooled-prompt';
 
 // Without schema — returns PromptResult<string>
 const { data } = await prompt`Your prompt here`();
@@ -422,7 +421,7 @@ const { data } = await prompt`Your prompt here`();
 const { data } = await prompt`Your prompt here`(zodSchema);
 
 // With SimpleSchema — returns PromptResult<{ field: string }>
-const { data } = await prompt`Your prompt here`({ field: "description" });
+const { data } = await prompt`Your prompt here`({ field: 'description' });
 
 // Per-call config
 const { data } = await prompt`Your prompt here`({ temperature: 0.9 });
@@ -430,15 +429,15 @@ const { data } = await prompt`Your prompt here`({ temperature: 0.9 });
 
 ### `setConfig`
 
-Update configuration for the default instance. 
+Update configuration for the default instance.
 
 ```typescript
-import { setConfig } from "tooled-prompt";
+import { setConfig } from 'tooled-prompt';
 
 setConfig({
-  apiUrl: "https://api.openai.com/v1",
+  apiUrl: 'https://api.openai.com/v1',
   apiKey: process.env.OPENAI_API_KEY,
-  modelName: "gpt-4o",
+  modelName: 'gpt-4o',
   temperature: 0.7,
   stream: true,
   timeout: 30000,
@@ -453,11 +452,11 @@ setConfig({
 Subscribe to and unsubscribe from events on the default instance.
 
 ```typescript
-import { on, off } from "tooled-prompt";
+import { on, off } from 'tooled-prompt';
 
 const handler = (content: string) => process.stdout.write(content);
-on("content", handler);
-off("content", handler);
+on('content', handler);
+off('content', handler);
 ```
 
 ### `createTooledPrompt`
@@ -465,9 +464,9 @@ off("content", handler);
 Create an isolated instance with its own configuration, event handlers, and tool scope.
 
 ```typescript
-import { createTooledPrompt } from "tooled-prompt";
+import { createTooledPrompt } from 'tooled-prompt';
 
-const instance = createTooledPrompt({ apiUrl: "...", apiKey: "..." });
+const instance = createTooledPrompt({ apiUrl: '...', apiKey: '...' });
 // instance.prompt, instance.setConfig, instance.on, instance.off, instance.tool
 ```
 
@@ -476,13 +475,13 @@ const instance = createTooledPrompt({ apiUrl: "...", apiKey: "..." });
 Wrap a function with explicit metadata (description, arg descriptors).
 
 ```typescript
-import { tool } from "tooled-prompt";
+import { tool } from 'tooled-prompt';
 
 // Named function
-tool(myFunc, { description: "...", args: ["arg1 desc", "arg2 desc"] });
+tool(myFunc, { description: '...', args: ['arg1 desc', 'arg2 desc'] });
 
 // Arrow function via object syntax
-tool({ myFunc }, { description: "...", args: ["arg1 desc"] });
+tool({ myFunc }, { description: '...', args: ['arg1 desc'] });
 ```
 
 ### `store`
@@ -490,7 +489,7 @@ tool({ myFunc }, { description: "...", args: ["arg1 desc"] });
 Create a typed store for capturing structured LLM output via tool calls.
 
 ```typescript
-import { store } from "tooled-prompt";
+import { store } from 'tooled-prompt';
 
 const myStore = store(zodSchema);
 // Use in template: ${myStore}
@@ -526,7 +525,7 @@ interface TooledPromptConfig {
   showThinking?: boolean; // Show full thinking content (default: false)
   systemPrompt?: string | SystemPromptBuilder; // System prompt (string or builder callback)
   maxToolResultLength?: number; // Max tool result chars before truncation (default: unlimited)
-  tools?: Function[];       
+  tools?: Function[];
 }
 ```
 

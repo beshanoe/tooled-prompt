@@ -24,45 +24,31 @@ describe('createTooledPrompt', () => {
 
   describe('config validation', () => {
     it('throws on invalid temperature (too low)', () => {
-      expect(() =>
-        createTooledPrompt({ temperature: -0.1 })
-      ).toThrow('temperature must be between 0 and 2');
+      expect(() => createTooledPrompt({ temperature: -0.1 })).toThrow('temperature must be between 0 and 2');
     });
 
     it('throws on invalid temperature (too high)', () => {
-      expect(() =>
-        createTooledPrompt({ temperature: 2.5 })
-      ).toThrow('temperature must be between 0 and 2');
+      expect(() => createTooledPrompt({ temperature: 2.5 })).toThrow('temperature must be between 0 and 2');
     });
 
     it('throws on invalid maxIterations (zero)', () => {
-      expect(() =>
-        createTooledPrompt({ maxIterations: 0 })
-      ).toThrow('maxIterations must be a positive integer');
+      expect(() => createTooledPrompt({ maxIterations: 0 })).toThrow('maxIterations must be a positive integer');
     });
 
     it('throws on invalid maxIterations (negative)', () => {
-      expect(() =>
-        createTooledPrompt({ maxIterations: -5 })
-      ).toThrow('maxIterations must be a positive integer');
+      expect(() => createTooledPrompt({ maxIterations: -5 })).toThrow('maxIterations must be a positive integer');
     });
 
     it('throws on invalid maxIterations (float)', () => {
-      expect(() =>
-        createTooledPrompt({ maxIterations: 5.5 })
-      ).toThrow('maxIterations must be a positive integer');
+      expect(() => createTooledPrompt({ maxIterations: 5.5 })).toThrow('maxIterations must be a positive integer');
     });
 
     it('throws on invalid timeout (negative)', () => {
-      expect(() =>
-        createTooledPrompt({ timeout: -1000 })
-      ).toThrow('timeout must be a positive number');
+      expect(() => createTooledPrompt({ timeout: -1000 })).toThrow('timeout must be a positive number');
     });
 
     it('throws on invalid timeout (Infinity)', () => {
-      expect(() =>
-        createTooledPrompt({ timeout: Infinity })
-      ).toThrow('timeout must be a positive number');
+      expect(() => createTooledPrompt({ timeout: Infinity })).toThrow('timeout must be a positive number');
     });
 
     it('accepts valid config values', () => {
@@ -71,7 +57,7 @@ describe('createTooledPrompt', () => {
           temperature: 0,
           maxIterations: 1,
           timeout: 0,
-        })
+        }),
       ).not.toThrow();
 
       expect(() =>
@@ -79,7 +65,7 @@ describe('createTooledPrompt', () => {
           temperature: 2,
           maxIterations: 100,
           timeout: 300000,
-        })
+        }),
       ).not.toThrow();
     });
   });
@@ -87,9 +73,7 @@ describe('createTooledPrompt', () => {
   describe('setConfig validation', () => {
     it('validates config on setConfig', () => {
       const instance = createTooledPrompt();
-      expect(() => instance.setConfig({ temperature: 3 })).toThrow(
-        'temperature must be between 0 and 2'
-      );
+      expect(() => instance.setConfig({ temperature: 3 })).toThrow('temperature must be between 0 and 2');
     });
 
     it('allows valid setConfig', () => {
@@ -144,10 +128,7 @@ describe('createTooledPrompt', () => {
 
       await instance.prompt`Test`();
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://test-api.example.com/v1/chat/completions',
-        expect.any(Object)
-      );
+      expect(mockFetch).toHaveBeenCalledWith('https://test-api.example.com/v1/chat/completions', expect.any(Object));
     });
 
     it('uses apiKey in Authorization header', async () => {
@@ -164,7 +145,7 @@ describe('createTooledPrompt', () => {
           headers: expect.objectContaining({
             Authorization: 'Bearer sk-test-key-12345',
           }),
-        })
+        }),
       );
     });
 
@@ -431,9 +412,15 @@ describe('createTooledPrompt', () => {
       return (body.tools || []).map((t: any) => t.function.name);
     }
 
-    function cfgGreet(name: string) { return `hi ${name}`; }
-    function cfgFarewell(name: string) { return `bye ${name}`; }
-    function cfgWave() { return '*waves*'; }
+    function cfgGreet(name: string) {
+      return `hi ${name}`;
+    }
+    function cfgFarewell(name: string) {
+      return `bye ${name}`;
+    }
+    function cfgWave() {
+      return '*waves*';
+    }
 
     const greet = tool(cfgGreet, { args: [['name', 'Name to greet']] });
     const farewell = tool(cfgFarewell, { args: [['name', 'Name']] });
@@ -467,7 +454,7 @@ describe('createTooledPrompt', () => {
 
       const names = toolNames(mockFetch.mock.calls[0]);
       expect(names).toContain('cfgFarewell'); // template tool
-      expect(names).toContain('cfgGreet');    // config tool
+      expect(names).toContain('cfgGreet'); // config tool
     });
 
     it('setConfig tools override factory tools', async () => {
@@ -486,8 +473,8 @@ describe('createTooledPrompt', () => {
       await instance.prompt`Do something`({ tools: [wave] });
 
       const names = toolNames(mockFetch.mock.calls[0]);
-      expect(names).toContain('cfgWave');      // per-call
-      expect(names).toContain('cfgFarewell');  // instance (replaced greet via setConfig)
+      expect(names).toContain('cfgWave'); // per-call
+      expect(names).toContain('cfgFarewell'); // instance (replaced greet via setConfig)
       expect(names).not.toContain('cfgGreet'); // overwritten by setConfig
     });
 

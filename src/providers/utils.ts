@@ -19,10 +19,8 @@ export function enforceAdditionalProperties(node: Record<string, unknown>): Reco
   }
   for (const [key, value] of Object.entries(result)) {
     if (Array.isArray(value)) {
-      result[key] = value.map(item =>
-        typeof item === 'object' && item !== null
-          ? enforceAdditionalProperties(item as Record<string, unknown>)
-          : item
+      result[key] = value.map((item) =>
+        typeof item === 'object' && item !== null ? enforceAdditionalProperties(item as Record<string, unknown>) : item,
       );
     } else if (typeof value === 'object' && value !== null) {
       result[key] = enforceAdditionalProperties(value as Record<string, unknown>);

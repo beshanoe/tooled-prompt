@@ -107,7 +107,7 @@ describe('systemPrompt', () => {
       const { prompt } = createTooledPrompt({
         apiKey: 'test',
         silent: true,
-        systemPrompt: prompt => prompt`You are an assistant. Use ${wrappedSearch} to find info.`,
+        systemPrompt: (prompt) => prompt`You are an assistant. Use ${wrappedSearch} to find info.`,
       });
 
       mockFetch.mockResolvedValue(mockLLMResponse('Done'));
@@ -131,7 +131,7 @@ describe('systemPrompt', () => {
       const { prompt } = createTooledPrompt({
         apiKey: 'test',
         silent: true,
-        systemPrompt: prompt => prompt`Use ${wrappedSearch} to find info.`,
+        systemPrompt: (prompt) => prompt`Use ${wrappedSearch} to find info.`,
       });
 
       mockFetch.mockResolvedValue(mockLLMResponse('Done'));
@@ -151,7 +151,7 @@ describe('systemPrompt', () => {
       const { prompt } = createTooledPrompt({
         apiKey: 'test',
         silent: true,
-        systemPrompt: prompt => prompt`You are a ${role}. Be precise.`,
+        systemPrompt: (prompt) => prompt`You are a ${role}. Be precise.`,
       });
 
       mockFetch.mockResolvedValue(mockLLMResponse('Done'));
@@ -287,10 +287,7 @@ describe('provider selection', () => {
 
     await prompt`Test`();
 
-    expect(mockFetch).toHaveBeenCalledWith(
-      'http://localhost:8080/v1/chat/completions',
-      expect.any(Object),
-    );
+    expect(mockFetch).toHaveBeenCalledWith('http://localhost:8080/v1/chat/completions', expect.any(Object));
   });
 
   it('Anthropic provider sends to /messages', async () => {
@@ -308,10 +305,7 @@ describe('provider selection', () => {
 
     await prompt`Test`();
 
-    expect(mockFetch).toHaveBeenCalledWith(
-      'https://api.anthropic.com/v1/messages',
-      expect.any(Object),
-    );
+    expect(mockFetch).toHaveBeenCalledWith('https://api.anthropic.com/v1/messages', expect.any(Object));
 
     // Verify Anthropic headers
     const headers = mockFetch.mock.calls[0][1].headers;
@@ -333,10 +327,7 @@ describe('provider selection', () => {
 
     await prompt`Test`();
 
-    expect(mockFetch).toHaveBeenCalledWith(
-      'http://localhost:11434/api/chat',
-      expect.any(Object),
-    );
+    expect(mockFetch).toHaveBeenCalledWith('http://localhost:11434/api/chat', expect.any(Object));
   });
 
   it('Anthropic provider uses max_tokens default of 4096', async () => {
@@ -425,9 +416,11 @@ describe('provider selection', () => {
         message: {
           content: '',
           role: 'assistant',
-          tool_calls: [{
-            function: { name: 'greet', arguments: { name: 'World' } },
-          }],
+          tool_calls: [
+            {
+              function: { name: 'greet', arguments: { name: 'World' } },
+            },
+          ],
         },
       }),
     });

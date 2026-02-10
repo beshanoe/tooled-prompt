@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { buildPromptText, runToolLoop } from '../executor.js';
-import { tool, TOOL_SYMBOL, type ToolFunction } from '../tool.js';
+import { tool } from '../tool.js';
 import type { ResolvedTooledPromptConfig } from '../types.js';
 import { resolveSchema } from '../types.js';
 import { TooledPromptEmitter } from '../events.js';
@@ -44,7 +44,7 @@ describe('buildPromptText', () => {
     const toolA = tool(function readFile(path: string) {
       return path;
     });
-    const toolB = tool(function writeFile(path: string, content: string) {
+    const toolB = tool(function writeFile(path: string, _content: string) {
       return path;
     });
 
@@ -52,9 +52,7 @@ describe('buildPromptText', () => {
       raw: ['Use ', ' and ', ' for file operations'],
     }) as TemplateStringsArray;
     const result = buildPromptText(strings, [toolA, toolB]);
-    expect(result).toBe(
-      'Use the "readFile" tool and the "writeFile" tool for file operations'
-    );
+    expect(result).toBe('Use the "readFile" tool and the "writeFile" tool for file operations');
   });
 
   it('skips undefined and null values', () => {
@@ -114,7 +112,7 @@ describe('runToolLoop', () => {
     toolCalls?: Array<{
       id: string;
       function: { name: string; arguments: string };
-    }>
+    }>,
   ) {
     return {
       ok: true,
@@ -157,7 +155,7 @@ describe('runToolLoop', () => {
           'Content-Type': 'application/json',
           Authorization: 'Bearer test-key',
         },
-      })
+      }),
     );
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
@@ -189,9 +187,7 @@ describe('runToolLoop', () => {
 
     // First call: LLM requests tool
     mockFetch.mockResolvedValueOnce(
-      mockLLMResponse('', [
-        { id: 'call1', function: { name: 'greet', arguments: '{"name":"World"}' } },
-      ])
+      mockLLMResponse('', [{ id: 'call1', function: { name: 'greet', arguments: '{"name":"World"}' } }]),
     );
     // Second call: LLM returns final response
     mockFetch.mockResolvedValueOnce(mockLLMResponse('I greeted World!'));
@@ -206,19 +202,23 @@ describe('runToolLoop', () => {
   it('handles multiple tool calls in sequence', async () => {
     const add = vi.fn((a: number, b: number) => a + b);
     // Use tuple args so param names match JSON keys: a, b
-    const addTool = tool({ add }, { args: [['a', 'First number'], ['b', 'Second number']] });
+    const addTool = tool(
+      { add },
+      {
+        args: [
+          ['a', 'First number'],
+          ['b', 'Second number'],
+        ],
+      },
+    );
 
     // First call: LLM requests first tool
     mockFetch.mockResolvedValueOnce(
-      mockLLMResponse('', [
-        { id: 'call1', function: { name: 'add', arguments: '{"a":1,"b":2}' } },
-      ])
+      mockLLMResponse('', [{ id: 'call1', function: { name: 'add', arguments: '{"a":1,"b":2}' } }]),
     );
     // Second call: LLM requests another tool
     mockFetch.mockResolvedValueOnce(
-      mockLLMResponse('', [
-        { id: 'call2', function: { name: 'add', arguments: '{"a":3,"b":4}' } },
-      ])
+      mockLLMResponse('', [{ id: 'call2', function: { name: 'add', arguments: '{"a":3,"b":4}' } }]),
     );
     // Third call: LLM returns final response
     mockFetch.mockResolvedValueOnce(mockLLMResponse('Results: 3 and 7'));
@@ -238,51 +238,41 @@ describe('runToolLoop', () => {
     });
 
     // Always request tool call
-    mockFetch.mockResolvedValue(
-      mockLLMResponse('', [
-        { id: 'call1', function: { name: 'loop', arguments: '{}' } },
-      ])
-    );
+    mockFetch.mockResolvedValue(mockLLMResponse('', [{ id: 'call1', function: { name: 'loop', arguments: '{}' } }]));
 
-    await expect(
-      runToolLoop('Loop forever', [infiniteTool], configWithLowIterations, emitter)
-    ).rejects.toThrow('Max iterations (2) reached');
+    await expect(runToolLoop('Loop forever', [infiniteTool], configWithLowIterations, emitter)).rejects.toThrow(
+      'Max iterations (2) reached',
+    );
   });
 
   it('validates response against schema', async () => {
-    const schema = resolveSchema(z.object({
-      name: z.string(),
-      age: z.number(),
-    }));
-
-    mockFetch.mockResolvedValue(
-      mockLLMResponse('{"name":"John","age":30}')
+    const schema = resolveSchema(
+      z.object({
+        name: z.string(),
+        age: z.number(),
+      }),
     );
 
-    const { result } = await runToolLoop(
-      'Get user',
-      [],
-      defaultConfig,
-      emitter,
-      schema
-    );
+    mockFetch.mockResolvedValue(mockLLMResponse('{"name":"John","age":30}'));
+
+    const { result } = await runToolLoop('Get user', [], defaultConfig, emitter, schema);
 
     expect(result).toEqual({ name: 'John', age: 30 });
   });
 
   it('throws on schema validation failure', async () => {
-    const schema = resolveSchema(z.object({
-      name: z.string(),
-      age: z.number(),
-    }));
-
-    mockFetch.mockResolvedValue(
-      mockLLMResponse('{"name":"John","age":"thirty"}')
+    const schema = resolveSchema(
+      z.object({
+        name: z.string(),
+        age: z.number(),
+      }),
     );
 
-    await expect(
-      runToolLoop('Get user', [], defaultConfig, emitter, schema)
-    ).rejects.toThrow('Schema validation failed');
+    mockFetch.mockResolvedValue(mockLLMResponse('{"name":"John","age":"thirty"}'));
+
+    await expect(runToolLoop('Get user', [], defaultConfig, emitter, schema)).rejects.toThrow(
+      'Schema validation failed',
+    );
   });
 
   it('throws on invalid JSON response when schema expected', async () => {
@@ -290,9 +280,7 @@ describe('runToolLoop', () => {
 
     mockFetch.mockResolvedValue(mockLLMResponse('not json'));
 
-    await expect(
-      runToolLoop('Get user', [], defaultConfig, emitter, schema)
-    ).rejects.toThrow('Failed to parse JSON');
+    await expect(runToolLoop('Get user', [], defaultConfig, emitter, schema)).rejects.toThrow('Failed to parse JSON');
   });
 
   it('handles tool execution errors', async () => {
@@ -302,9 +290,7 @@ describe('runToolLoop', () => {
 
     // First call: LLM requests tool
     mockFetch.mockResolvedValueOnce(
-      mockLLMResponse('', [
-        { id: 'call1', function: { name: 'fail', arguments: '{}' } },
-      ])
+      mockLLMResponse('', [{ id: 'call1', function: { name: 'fail', arguments: '{}' } }]),
     );
     // Second call: LLM returns response after receiving error
     mockFetch.mockResolvedValueOnce(mockLLMResponse('Tool failed'));
@@ -325,9 +311,9 @@ describe('runToolLoop', () => {
       text: async () => 'Internal Server Error',
     });
 
-    await expect(
-      runToolLoop('Test', [], defaultConfig, emitter)
-    ).rejects.toThrow('LLM request failed (500): Internal Server Error');
+    await expect(runToolLoop('Test', [], defaultConfig, emitter)).rejects.toThrow(
+      'LLM request failed (500): Internal Server Error',
+    );
   });
 
   it('handles timeout', async () => {
@@ -348,20 +334,16 @@ describe('runToolLoop', () => {
             err.name = 'AbortError';
             reject(err);
           });
-        })
+        }),
     );
 
-    await expect(
-      runToolLoop('Test', [], slowConfig, emitter)
-    ).rejects.toThrow('Request timeout after 10ms');
+    await expect(runToolLoop('Test', [], slowConfig, emitter)).rejects.toThrow('Request timeout after 10ms');
   });
 
   it('handles unknown tool gracefully', async () => {
     // LLM requests a tool that doesn't exist
     mockFetch.mockResolvedValueOnce(
-      mockLLMResponse('', [
-        { id: 'call1', function: { name: 'unknownTool', arguments: '{}' } },
-      ])
+      mockLLMResponse('', [{ id: 'call1', function: { name: 'unknownTool', arguments: '{}' } }]),
     );
     // LLM responds after receiving error
     mockFetch.mockResolvedValueOnce(mockLLMResponse('Unknown tool error'));
@@ -382,9 +364,7 @@ describe('runToolLoop', () => {
     });
 
     mockFetch.mockResolvedValueOnce(
-      mockLLMResponse('', [
-        { id: 'call1', function: { name: 'test', arguments: 'not json' } },
-      ])
+      mockLLMResponse('', [{ id: 'call1', function: { name: 'test', arguments: 'not json' } }]),
     );
     mockFetch.mockResolvedValueOnce(mockLLMResponse('Recovered'));
 
@@ -403,9 +383,7 @@ describe('runToolLoop', () => {
     });
 
     mockFetch.mockResolvedValueOnce(
-      mockLLMResponse('', [
-        { id: 'call1', function: { name: 'echo', arguments: '{"msg":"hello"}' } },
-      ])
+      mockLLMResponse('', [{ id: 'call1', function: { name: 'echo', arguments: '{"msg":"hello"}' } }]),
     );
     mockFetch.mockResolvedValueOnce(mockLLMResponse('Done'));
 
@@ -437,9 +415,7 @@ describe('runToolLoop', () => {
     });
 
     mockFetch.mockResolvedValueOnce(
-      mockLLMResponse('', [
-        { id: 'call1', function: { name: 'doNothing', arguments: '{}' } },
-      ])
+      mockLLMResponse('', [{ id: 'call1', function: { name: 'doNothing', arguments: '{}' } }]),
     );
     mockFetch.mockResolvedValueOnce(mockLLMResponse('Done'));
 
@@ -459,9 +435,7 @@ describe('runToolLoop', () => {
     });
 
     mockFetch.mockResolvedValueOnce(
-      mockLLMResponse('', [
-        { id: 'call1', function: { name: 'getUser', arguments: '{}' } },
-      ])
+      mockLLMResponse('', [{ id: 'call1', function: { name: 'getUser', arguments: '{}' } }]),
     );
     mockFetch.mockResolvedValueOnce(mockLLMResponse('Got user'));
 
@@ -478,7 +452,16 @@ describe('runToolLoop', () => {
       return `${first}-${second}-${third}`;
     });
     // Use tuple args so param names match JSON keys
-    const orderedTool = tool({ ordered }, { args: [['first', 'First'], ['second', 'Second'], ['third', 'Third']] });
+    const orderedTool = tool(
+      { ordered },
+      {
+        args: [
+          ['first', 'First'],
+          ['second', 'Second'],
+          ['third', 'Third'],
+        ],
+      },
+    );
 
     mockFetch.mockResolvedValueOnce(
       mockLLMResponse('', [
@@ -486,7 +469,7 @@ describe('runToolLoop', () => {
           id: 'call1',
           function: { name: 'ordered', arguments: '{"first":"A","second":"B","third":"C"}' },
         },
-      ])
+      ]),
     );
     mockFetch.mockResolvedValueOnce(mockLLMResponse('Done'));
 
@@ -506,9 +489,7 @@ describe('runToolLoop', () => {
       });
 
       mockFetch.mockResolvedValueOnce(
-        mockLLMResponse('', [
-          { id: 'call1', function: { name: 'readDir', arguments: '{}' } },
-        ])
+        mockLLMResponse('', [{ id: 'call1', function: { name: 'readDir', arguments: '{}' } }]),
       );
       mockFetch.mockResolvedValueOnce(mockLLMResponse('Found files'));
 
@@ -531,9 +512,7 @@ describe('runToolLoop', () => {
       });
 
       mockFetch.mockResolvedValueOnce(
-        mockLLMResponse('', [
-          { id: 'call1', function: { name: 'generate', arguments: '{}' } },
-        ])
+        mockLLMResponse('', [{ id: 'call1', function: { name: 'generate', arguments: '{}' } }]),
       );
       mockFetch.mockResolvedValueOnce(mockLLMResponse('Got numbers'));
 
@@ -551,9 +530,7 @@ describe('runToolLoop', () => {
       });
 
       mockFetch.mockResolvedValueOnce(
-        mockLLMResponse('', [
-          { id: 'call1', function: { name: 'getText', arguments: '{}' } },
-        ])
+        mockLLMResponse('', [{ id: 'call1', function: { name: 'getText', arguments: '{}' } }]),
       );
       mockFetch.mockResolvedValueOnce(mockLLMResponse('Done'));
 
@@ -571,9 +548,7 @@ describe('runToolLoop', () => {
       });
 
       mockFetch.mockResolvedValueOnce(
-        mockLLMResponse('', [
-          { id: 'call1', function: { name: 'getList', arguments: '{}' } },
-        ])
+        mockLLMResponse('', [{ id: 'call1', function: { name: 'getList', arguments: '{}' } }]),
       );
       mockFetch.mockResolvedValueOnce(mockLLMResponse('Done'));
 
@@ -591,9 +566,7 @@ describe('runToolLoop', () => {
       });
 
       mockFetch.mockResolvedValueOnce(
-        mockLLMResponse('', [
-          { id: 'call1', function: { name: 'getObj', arguments: '{}' } },
-        ])
+        mockLLMResponse('', [{ id: 'call1', function: { name: 'getObj', arguments: '{}' } }]),
       );
       mockFetch.mockResolvedValueOnce(mockLLMResponse('Done'));
 
@@ -679,7 +652,7 @@ describe('runToolLoop', () => {
           'data: {"choices":[{"delta":{"content":"Hello"}}]}\n\n',
           'data: {"choices":[{"delta":{"content":" World"}}]}\n\n',
           'data: [DONE]\n\n',
-        ])
+        ]),
       );
 
       const contentHandler = vi.fn();
@@ -705,15 +678,12 @@ describe('runToolLoop', () => {
           'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\\"x\\":"}}]}}]}\n\n',
           'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\\"hi\\"}"}}]}}]}\n\n',
           'data: [DONE]\n\n',
-        ])
+        ]),
       );
 
       // Second request: final response (non-streaming for simplicity)
       mockFetch.mockResolvedValueOnce(
-        createMockStream([
-          'data: {"choices":[{"delta":{"content":"Done"}}]}\n\n',
-          'data: [DONE]\n\n',
-        ])
+        createMockStream(['data: {"choices":[{"delta":{"content":"Done"}}]}\n\n', 'data: [DONE]\n\n']),
       );
 
       const { result } = await runToolLoop('Echo hi', [echoTool], streamConfig, emitter);

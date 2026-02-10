@@ -32,6 +32,7 @@ describe('parseFunction', () => {
     });
 
     it('parses function with multiple params', () => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       function multiParams(a: string, b: number, c: boolean) {
         return a;
       }
@@ -93,6 +94,7 @@ describe('parseFunction', () => {
     });
 
     it('handles mixed required and optional params', () => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       function mixedParams(required: string, optional: number = 10) {
         return required;
       }
@@ -105,6 +107,7 @@ describe('parseFunction', () => {
     });
 
     it('handles multiple default values', () => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       function multiDefaults(a: string = 'x', b: number = 1, c: boolean = true) {
         return a;
       }
@@ -128,6 +131,7 @@ describe('parseFunction', () => {
     });
 
     it('handles function with complex type annotations', () => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       function complexTypes(obj: { foo: string }, arr: string[]) {
         return obj;
       }
@@ -144,6 +148,7 @@ describe('parseFunction', () => {
     it('TypeScript optional syntax (?) is NOT detectable at runtime', () => {
       // TypeScript compiles fn(x?: string) to fn(x) - the ? is stripped
       // This test documents the limitation, not a feature
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       function withTsOptional(required: string, optional?: number) {
         return required;
       }

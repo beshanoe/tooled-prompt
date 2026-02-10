@@ -26,7 +26,14 @@ export function registerProvider(name: string, adapter: ProviderAdapter): void {
 }
 
 // Re-export types and classes for advanced users
-export type { ProviderAdapter, ToolCallInfo, ToolResultInfo, ParsedResponse, BuildRequestParams, BuildRequestResult } from './types.js';
+export type {
+  ProviderAdapter,
+  ToolCallInfo,
+  ToolResultInfo,
+  ParsedResponse,
+  BuildRequestParams,
+  BuildRequestResult,
+} from './types.js';
 export { OpenAIProvider } from './openai.js';
 export { AnthropicProvider } from './anthropic.js';
 export { OllamaProvider } from './ollama.js';

@@ -7,7 +7,14 @@
 
 import type { ContentPart, PromptContent } from '../types.js';
 import type { TooledPromptEmitter } from '../events.js';
-import type { ProviderAdapter, ToolCallInfo, ToolResultInfo, ParsedResponse, BuildRequestParams, BuildRequestResult } from './types.js';
+import type {
+  ProviderAdapter,
+  ToolCallInfo,
+  ToolResultInfo,
+  ParsedResponse,
+  BuildRequestParams,
+  BuildRequestResult,
+} from './types.js';
 import { parseSSEStream } from '../streaming.js';
 import { toolsToOpenAIFormat, enforceAdditionalProperties } from './utils.js';
 
@@ -83,11 +90,16 @@ export class OpenAIProvider implements ProviderAdapter<OpenAIMessage> {
     return {
       role: 'assistant',
       content: content || null,
-      tool_calls: toolCalls.length > 0 ? toolCalls.map((tc): OpenAIToolCall => ({
-        id: tc.id,
-        type: 'function',
-        function: { name: tc.name, arguments: tc.arguments },
-      })) : undefined,
+      tool_calls:
+        toolCalls.length > 0
+          ? toolCalls.map(
+              (tc): OpenAIToolCall => ({
+                id: tc.id,
+                type: 'function',
+                function: { name: tc.name, arguments: tc.arguments },
+              }),
+            )
+          : undefined,
     };
   }
 
@@ -99,11 +111,7 @@ export class OpenAIProvider implements ProviderAdapter<OpenAIMessage> {
     }));
   }
 
-  async parseResponse(
-    response: Response,
-    streaming: boolean,
-    emitter: TooledPromptEmitter,
-  ): Promise<ParsedResponse> {
+  async parseResponse(response: Response, streaming: boolean, emitter: TooledPromptEmitter): Promise<ParsedResponse> {
     let content = '';
     let toolCalls: ToolCallInfo[] = [];
 
@@ -149,7 +157,7 @@ export class OpenAIProvider implements ProviderAdapter<OpenAIMessage> {
       }
     } else {
       // Non-streaming response
-      const data = await response.json() as {
+      const data = (await response.json()) as {
         choices?: Array<{
           message: {
             content?: string;
@@ -168,7 +176,7 @@ export class OpenAIProvider implements ProviderAdapter<OpenAIMessage> {
       }
 
       content = choice.message.content || '';
-      toolCalls = (choice.message.tool_calls || []).map(tc => ({
+      toolCalls = (choice.message.tool_calls || []).map((tc) => ({
         id: tc.id,
         name: tc.function.name,
         arguments: tc.function.arguments,

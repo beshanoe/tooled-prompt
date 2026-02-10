@@ -7,7 +7,14 @@
 
 import type { ContentPart, PromptContent } from '../types.js';
 import type { TooledPromptEmitter } from '../events.js';
-import type { ProviderAdapter, ToolCallInfo, ToolResultInfo, ParsedResponse, BuildRequestParams, BuildRequestResult } from './types.js';
+import type {
+  ProviderAdapter,
+  ToolCallInfo,
+  ToolResultInfo,
+  ParsedResponse,
+  BuildRequestParams,
+  BuildRequestResult,
+} from './types.js';
 import { parseDataUrl, toolsToOpenAIFormat } from './utils.js';
 
 type OllamaToolCall = { function: { name: string; arguments: string | Record<string, unknown> } };
@@ -53,7 +60,7 @@ function extractText(content: PromptContent): string {
   if (typeof content === 'string') return content;
   return content
     .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
-    .map(p => p.text)
+    .map((p) => p.text)
     .join('');
 }
 
@@ -117,32 +124,31 @@ export class OllamaProvider implements ProviderAdapter<OllamaMessage> {
     return {
       role: 'assistant',
       content: content || '',
-      tool_calls: toolCalls.length > 0 ? toolCalls.map((tc): OllamaToolCall => {
-        let args: string | Record<string, unknown>;
-        try {
-          args = JSON.parse(tc.arguments);
-        } catch {
-          args = {};
-        }
-        return {
-          function: { name: tc.name, arguments: args },
-        };
-      }) : undefined,
+      tool_calls:
+        toolCalls.length > 0
+          ? toolCalls.map((tc): OllamaToolCall => {
+              let args: string | Record<string, unknown>;
+              try {
+                args = JSON.parse(tc.arguments);
+              } catch {
+                args = {};
+              }
+              return {
+                function: { name: tc.name, arguments: args },
+              };
+            })
+          : undefined,
     };
   }
 
   formatToolResults(results: ToolResultInfo[]): OllamaMessage[] {
-    return results.map(tr => ({
+    return results.map((tr) => ({
       role: 'tool',
       content: tr.result,
     }));
   }
 
-  async parseResponse(
-    response: Response,
-    streaming: boolean,
-    emitter: TooledPromptEmitter,
-  ): Promise<ParsedResponse> {
+  async parseResponse(response: Response, streaming: boolean, emitter: TooledPromptEmitter): Promise<ParsedResponse> {
     let content = '';
     const toolCalls: ToolCallInfo[] = [];
 
@@ -181,9 +187,10 @@ export class OllamaProvider implements ProviderAdapter<OllamaMessage> {
               toolCalls.push({
                 id: `ollama_${toolCalls.length}`,
                 name: tc.function?.name || '',
-                arguments: typeof tc.function?.arguments === 'string'
-                  ? tc.function.arguments
-                  : JSON.stringify(tc.function?.arguments || {}),
+                arguments:
+                  typeof tc.function?.arguments === 'string'
+                    ? tc.function.arguments
+                    : JSON.stringify(tc.function?.arguments || {}),
               });
             }
           }
@@ -197,7 +204,7 @@ export class OllamaProvider implements ProviderAdapter<OllamaMessage> {
       }
     } else {
       // Non-streaming response
-      const data = await response.json() as OllamaResponse;
+      const data = (await response.json()) as OllamaResponse;
 
       if (!data.message) {
         throw new Error('No response from LLM');
@@ -210,9 +217,10 @@ export class OllamaProvider implements ProviderAdapter<OllamaMessage> {
           toolCalls.push({
             id: `ollama_${toolCalls.length}`,
             name: tc.function?.name || '',
-            arguments: typeof tc.function?.arguments === 'string'
-              ? tc.function.arguments
-              : JSON.stringify(tc.function?.arguments || {}),
+            arguments:
+              typeof tc.function?.arguments === 'string'
+                ? tc.function.arguments
+                : JSON.stringify(tc.function?.arguments || {}),
           });
         }
       }

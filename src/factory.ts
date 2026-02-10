@@ -7,7 +7,7 @@
  * 3. Hardcoded defaults
  */
 
-import type { ZodType } from "zod";
+import type { ZodType } from 'zod';
 import {
   TOOL_SYMBOL,
   type ToolFunction,
@@ -25,28 +25,19 @@ import {
   isZodSchema,
   isSimpleSchema,
   resolveSchema,
-} from "./types.js";
-import { tool } from "./tool.js";
-import { buildPromptText, runToolLoop } from "./executor.js";
-import { processImageValues } from "./image.js";
-import {
-  TooledPromptEmitter,
-  installDefaultHandlers,
-  type TooledPromptEvents,
-} from "./events.js";
-import {
-  RETURN_SYMBOL,
-  RETURN_SENTINEL,
-  createStore,
-  type Store,
-} from "./store.js";
+} from './types.js';
+import { tool } from './tool.js';
+import { buildPromptText, runToolLoop } from './executor.js';
+import { processImageValues } from './image.js';
+import { TooledPromptEmitter, installDefaultHandlers, type TooledPromptEvents } from './events.js';
+import { RETURN_SYMBOL, RETURN_SENTINEL, createStore } from './store.js';
 
 /**
  * Default configuration values
  */
 const DEFAULTS: ResolvedTooledPromptConfig = {
-  apiUrl: "",
-  modelName: "",
+  apiUrl: '',
+  modelName: '',
   apiKey: undefined,
   maxIterations: undefined,
   temperature: undefined,
@@ -54,7 +45,7 @@ const DEFAULTS: ResolvedTooledPromptConfig = {
   timeout: 60000,
   silent: false,
   showThinking: false,
-  provider: "openai",
+  provider: 'openai',
   maxTokens: undefined,
   systemPrompt: undefined,
   maxToolResultLength: undefined,
@@ -65,29 +56,17 @@ const DEFAULTS: ResolvedTooledPromptConfig = {
  * @throws Error if config values are invalid
  */
 function validateConfig(config: TooledPromptConfig): void {
-  if (
-    config.temperature !== undefined &&
-    (config.temperature < 0 || config.temperature > 2)
-  ) {
-    throw new Error("temperature must be between 0 and 2");
+  if (config.temperature !== undefined && (config.temperature < 0 || config.temperature > 2)) {
+    throw new Error('temperature must be between 0 and 2');
   }
-  if (
-    config.maxIterations !== undefined &&
-    (config.maxIterations < 1 || !Number.isInteger(config.maxIterations))
-  ) {
-    throw new Error("maxIterations must be a positive integer");
+  if (config.maxIterations !== undefined && (config.maxIterations < 1 || !Number.isInteger(config.maxIterations))) {
+    throw new Error('maxIterations must be a positive integer');
   }
-  if (
-    config.timeout !== undefined &&
-    (config.timeout < 0 || !Number.isFinite(config.timeout))
-  ) {
-    throw new Error("timeout must be a positive number");
+  if (config.timeout !== undefined && (config.timeout < 0 || !Number.isFinite(config.timeout))) {
+    throw new Error('timeout must be a positive number');
   }
-  if (
-    config.maxTokens !== undefined &&
-    (config.maxTokens < 1 || !Number.isInteger(config.maxTokens))
-  ) {
-    throw new Error("maxTokens must be a positive integer");
+  if (config.maxTokens !== undefined && (config.maxTokens < 1 || !Number.isInteger(config.maxTokens))) {
+    throw new Error('maxTokens must be a positive integer');
   }
 }
 
@@ -95,9 +74,7 @@ function validateConfig(config: TooledPromptConfig): void {
  * Merge multiple configs, with earlier configs taking priority
  * undefined values are skipped, allowing lower-priority configs to provide defaults
  */
-function mergeConfigs(
-  ...configs: TooledPromptConfig[]
-): ResolvedTooledPromptConfig {
+function mergeConfigs(...configs: TooledPromptConfig[]): ResolvedTooledPromptConfig {
   const result: Record<string, unknown> = {};
 
   // Process configs in order (first has highest priority)
@@ -141,9 +118,7 @@ function mergeConfigs(
  * const local = createTooledPrompt({ apiUrl: 'http://localhost:8080/v1' });
  * ```
  */
-export function createTooledPrompt(
-  initialConfig: TooledPromptConfig = {},
-): TooledPromptInstance {
+export function createTooledPrompt(initialConfig: TooledPromptConfig = {}): TooledPromptInstance {
   // Validate initial config
   validateConfig(initialConfig);
 
@@ -162,9 +137,7 @@ export function createTooledPrompt(
   /**
    * Resolve the current config by merging all sources
    */
-  function resolveConfig(
-    perCallConfig: TooledPromptConfig = {},
-  ): ResolvedTooledPromptConfig {
+  function resolveConfig(perCallConfig: TooledPromptConfig = {}): ResolvedTooledPromptConfig {
     return mergeConfigs(
       perCallConfig, // 1. Per-call (highest priority)
       config, // 2. Instance config (factory initial, mutated by setConfig)
@@ -190,7 +163,7 @@ export function createTooledPrompt(
     // Extract tools and auto-wrap functions (same logic as prompt())
     for (let i = 0; i < values.length; i++) {
       const value = values[i];
-      if (typeof value === "function") {
+      if (typeof value === 'function') {
         if (TOOL_SYMBOL in value) {
           spTools.push(value as ToolFunction);
         } else {
@@ -215,9 +188,7 @@ export function createTooledPrompt(
         }
       }
       // Return text-only content (images go separately)
-      const textContent = textParts.length === 1 && textParts[0].type === 'text'
-        ? textParts[0].text
-        : textParts;
+      const textContent = textParts.length === 1 && textParts[0].type === 'text' ? textParts[0].text : textParts;
       return { content: textContent as PromptContent, tools: spTools, images: spImages };
     }
 
@@ -252,10 +223,7 @@ export function createTooledPrompt(
    * Collect config-level tools (per-call + instance concatenated)
    */
   function collectConfigTools(perCallConfig: TooledPromptConfig = {}): ToolFunction[] {
-    return [
-      ...(perCallConfig.tools || []),
-      ...(config.tools || []),
-    ];
+    return [...(perCallConfig.tools || []), ...(config.tools || [])];
   }
 
   /**
@@ -273,16 +241,12 @@ export function createTooledPrompt(
       const value = values[i];
 
       // Detect return sentinel
-      if (
-        typeof value === "object" &&
-        value !== null &&
-        RETURN_SYMBOL in value
-      ) {
+      if (typeof value === 'object' && value !== null && RETURN_SYMBOL in value) {
         returnIndices.push(i);
         continue;
       }
 
-      if (typeof value === "function") {
+      if (typeof value === 'function') {
         // If already a tool, use as-is; otherwise auto-wrap
         if (TOOL_SYMBOL in value) {
           tools.push(value as ToolFunction);
@@ -292,7 +256,7 @@ export function createTooledPrompt(
           if (!fn.name) {
             // Build context from template strings
             const before = strings[i].slice(-20).trim();
-            const after = strings[i + 1]?.slice(0, 20).trim() || "";
+            const after = strings[i + 1]?.slice(0, 20).trim() || '';
             const wrapped = tool(fn);
             const assignedName = (wrapped as ToolFunction)[TOOL_SYMBOL].name;
 
@@ -379,13 +343,11 @@ export function createTooledPrompt(
       // Handle return sentinels
       if (params.returnIndices.length > 0) {
         if (!resolved) {
-          throw new Error(
-            "prompt.return requires a schema — pass a Zod schema or SimpleSchema to the executor",
-          );
+          throw new Error('prompt.return requires a schema — pass a Zod schema or SimpleSchema to the executor');
         }
 
         const resolvedValues = [...params.values];
-        const returnStore = createStore<T>("return_value", resolved);
+        const returnStore = createStore<T>('return_value', resolved);
 
         for (const i of params.returnIndices) {
           resolvedValues[i] = returnStore;
@@ -431,14 +393,8 @@ export function createTooledPrompt(
   /**
    * Build a `next` tagged template from conversation history and previous tools.
    */
-  function buildNext(
-    prevMessages: unknown[],
-    prevTools: ToolFunction[],
-  ): PromptTaggedTemplate {
-    function next(
-      strings: TemplateStringsArray,
-      ...values: unknown[]
-    ): PromptExecutor {
+  function buildNext(prevMessages: unknown[], prevTools: ToolFunction[]): PromptTaggedTemplate {
+    function next(strings: TemplateStringsArray, ...values: unknown[]): PromptExecutor {
       const { tools: newTools, returnIndices } = extractTemplateTools(strings, values);
       const mergedTools = deduplicateTools(prevTools, newTools);
 
@@ -459,10 +415,7 @@ export function createTooledPrompt(
   /**
    * Tagged template for defining LLM prompts
    */
-  function prompt(
-    strings: TemplateStringsArray,
-    ...values: unknown[]
-  ): PromptExecutor {
+  function prompt(strings: TemplateStringsArray, ...values: unknown[]): PromptExecutor {
     const { tools, returnIndices } = extractTemplateTools(strings, values);
 
     return makeExecutor({
@@ -480,25 +433,19 @@ export function createTooledPrompt(
   /**
    * Subscribe to an event
    */
-  function on<K extends keyof TooledPromptEvents>(
-    event: K,
-    handler: TooledPromptEvents[K],
-  ): void {
+  function on<K extends keyof TooledPromptEvents>(event: K, handler: TooledPromptEvents[K]): void {
     emitter.on(event, handler);
   }
 
   /**
    * Unsubscribe from an event
    */
-  function off<K extends keyof TooledPromptEvents>(
-    event: K,
-    handler: TooledPromptEvents[K],
-  ): void {
+  function off<K extends keyof TooledPromptEvents>(event: K, handler: TooledPromptEvents[K]): void {
     emitter.off(event, handler);
   }
 
   return {
-    prompt: prompt as TooledPromptInstance["prompt"],
+    prompt: prompt as TooledPromptInstance['prompt'],
     tool,
     setConfig,
     on,
