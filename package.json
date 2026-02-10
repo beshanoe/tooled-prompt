@@ -47,6 +47,7 @@
   "homepage": "https://github.com/beshanoe/tooled-prompt#readme",
   "sideEffects": false,
   "dependencies": {
+    "dedent": "^1.7.1",
     "file-type": "^21.3.0"
   },
   "devDependencies": {

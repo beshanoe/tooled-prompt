@@ -70,6 +70,20 @@ describe('buildPromptText', () => {
     const result = buildPromptText(strings, []);
     expect(result).toBe('line1\nline2');
   });
+
+  it('removes common leading indentation from multi-line templates', () => {
+    // Simulates a tagged template written inside indented code:
+    //   prompt`
+    //       Summarize the files.
+    //       Use tools to help.
+    //   `
+    const strings = Object.assign(
+      ['\n      Summarize the files.\n      Use tools to help.\n    '],
+      { raw: ['\n      Summarize the files.\n      Use tools to help.\n    '] },
+    ) as TemplateStringsArray;
+    const result = buildPromptText(strings, []);
+    expect(result).toBe('Summarize the files.\nUse tools to help.');
+  });
 });
 
 describe('runToolLoop', () => {
