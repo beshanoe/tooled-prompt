@@ -1,0 +1,39 @@
+name: Sync Version and Publish
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Needed to push the version bump back to the repo
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          # Fetch all history so we can push back to the branch
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'latest'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Update package.json version
+        run: |
+          # Extract version from tag (e.g., v1.0.5 -> 1.0.5)
+          CLEAN_VERSION=$(echo "${{ github.event.release.tag_name }}" | sed 's/^v//')
+          
+          # Set git identity
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Bump version without creating a new git tag (since the tag already exists)
+          npm version $CLEAN_VERSION --no-git-tag-version
+          
+          # Commit and push the change back to the main branch
+          git add package.json
+          git commit -m "chore: bump version to $CLEAN_VERSION [skip ci]"
+          git push
