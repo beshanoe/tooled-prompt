@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createTooledPrompt } from '../factory.js';
 import { tool } from '../tool.js';
+import { MESSAGES_SYMBOL } from '../messages.js';
 
 describe('createTooledPrompt', () => {
   describe('instance creation', () => {
@@ -305,7 +306,7 @@ describe('createTooledPrompt', () => {
       const secondCall = mockFetch.mock.calls[1];
       const body = JSON.parse(secondCall[1].body);
       const toolNames = (body.tools || []).map((t: any) => t.function.name);
-      expect(toolNames).toContain('sayHi');
+      expect(toolNames).toContain('say_hi');
     });
 
     it('next deduplicates tools by name (new wins)', async () => {
@@ -323,7 +324,7 @@ describe('createTooledPrompt', () => {
 
       const secondCall = mockFetch.mock.calls[1];
       const body = JSON.parse(secondCall[1].body);
-      const greetTools = (body.tools || []).filter((t: any) => t.function.name === 'myGreet1');
+      const greetTools = (body.tools || []).filter((t: any) => t.function.name === 'my_greet1');
       expect(greetTools).toHaveLength(1);
       expect(greetTools[0].function.description).toBe('v2');
     });
@@ -342,8 +343,8 @@ describe('createTooledPrompt', () => {
       const secondCall = mockFetch.mock.calls[1];
       const body = JSON.parse(secondCall[1].body);
       const toolNames = (body.tools || []).map((t: any) => t.function.name);
-      expect(toolNames).toContain('greetPerson');
-      expect(toolNames).toContain('wavePerson');
+      expect(toolNames).toContain('greet_person');
+      expect(toolNames).toContain('wave_person');
     });
 
     it('next chains work multiple levels deep', async () => {
@@ -430,7 +431,7 @@ describe('createTooledPrompt', () => {
       const instance = createTooledPrompt({ tools: [greet], silent: true });
       await instance.prompt`Do something`();
 
-      expect(toolNames(mockFetch.mock.calls[0])).toContain('cfgGreet');
+      expect(toolNames(mockFetch.mock.calls[0])).toContain('cfg_greet');
     });
 
     it('setConfig tools included in API request body', async () => {
@@ -438,14 +439,14 @@ describe('createTooledPrompt', () => {
       instance.setConfig({ tools: [farewell] });
       await instance.prompt`Do something`();
 
-      expect(toolNames(mockFetch.mock.calls[0])).toContain('cfgFarewell');
+      expect(toolNames(mockFetch.mock.calls[0])).toContain('cfg_farewell');
     });
 
     it('per-call config tools included', async () => {
       const instance = createTooledPrompt({ silent: true });
       await instance.prompt`Do something`({ tools: [wave] });
 
-      expect(toolNames(mockFetch.mock.calls[0])).toContain('cfgWave');
+      expect(toolNames(mockFetch.mock.calls[0])).toContain('cfg_wave');
     });
 
     it('config tools merged with template tools (not replacing)', async () => {
@@ -453,8 +454,8 @@ describe('createTooledPrompt', () => {
       await instance.prompt`Use ${farewell}`();
 
       const names = toolNames(mockFetch.mock.calls[0]);
-      expect(names).toContain('cfgFarewell'); // template tool
-      expect(names).toContain('cfgGreet'); // config tool
+      expect(names).toContain('cfg_farewell'); // template tool
+      expect(names).toContain('cfg_greet'); // config tool
     });
 
     it('setConfig tools override factory tools', async () => {
@@ -463,8 +464,8 @@ describe('createTooledPrompt', () => {
       await instance.prompt`Do something`();
 
       const names = toolNames(mockFetch.mock.calls[0]);
-      expect(names).toContain('cfgFarewell');
-      expect(names).not.toContain('cfgGreet');
+      expect(names).toContain('cfg_farewell');
+      expect(names).not.toContain('cfg_greet');
     });
 
     it('per-call tools concatenated with instance tools', async () => {
@@ -473,9 +474,9 @@ describe('createTooledPrompt', () => {
       await instance.prompt`Do something`({ tools: [wave] });
 
       const names = toolNames(mockFetch.mock.calls[0]);
-      expect(names).toContain('cfgWave'); // per-call
-      expect(names).toContain('cfgFarewell'); // instance (replaced greet via setConfig)
-      expect(names).not.toContain('cfgGreet'); // overwritten by setConfig
+      expect(names).toContain('cfg_wave'); // per-call
+      expect(names).toContain('cfg_farewell'); // instance (replaced greet via setConfig)
+      expect(names).not.toContain('cfg_greet'); // overwritten by setConfig
     });
 
     it('setConfig replaces (not appends) within its layer', async () => {
@@ -485,8 +486,84 @@ describe('createTooledPrompt', () => {
       await instance.prompt`Do something`();
 
       const names = toolNames(mockFetch.mock.calls[0]);
-      expect(names).toContain('cfgFarewell');
-      expect(names).not.toContain('cfgGreet');
+      expect(names).toContain('cfg_farewell');
+      expect(names).not.toContain('cfg_greet');
+    });
+  });
+
+  describe('prompt.messages()', () => {
+    let originalFetch: typeof globalThis.fetch;
+    let mockFetch: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      originalFetch = globalThis.fetch;
+      mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: 'OK' } }],
+        }),
+      });
+      globalThis.fetch = mockFetch;
+    });
+
+    afterEach(() => {
+      globalThis.fetch = originalFetch;
+    });
+
+    it('prompt.messages is a function', () => {
+      const instance = createTooledPrompt({ silent: true });
+      expect(instance.prompt.messages).toBeInstanceOf(Function);
+    });
+
+    it('next.messages() throws', async () => {
+      const instance = createTooledPrompt({ silent: true });
+      const { next } = await instance.prompt`Hello`();
+      expect(() => next.messages([{ role: 'user', content: 'Hi' }])).toThrow(
+        'prompt.messages() cannot be used inside next (conversation already has history)',
+      );
+    });
+
+    it('creates sentinel with MESSAGES_SYMBOL', () => {
+      const instance = createTooledPrompt({ silent: true });
+      const sentinel = instance.prompt.messages([{ role: 'user', content: 'Hi' }]);
+      expect(MESSAGES_SYMBOL in sentinel).toBe(true);
+      expect(sentinel.messages).toHaveLength(1);
+    });
+
+    it('sentinel stripped from prompt text', async () => {
+      const instance = createTooledPrompt({ silent: true });
+
+      await instance.prompt`
+        ${instance.prompt.messages([{ role: 'user', content: 'Hi' }])}
+
+        Follow up question
+      `();
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      const lastMessage = body.messages[body.messages.length - 1];
+      expect(lastMessage.content).toBe('Follow up question');
+    });
+
+    it('throws on multiple prompt.messages()', () => {
+      const instance = createTooledPrompt({ silent: true });
+
+      expect(
+        () =>
+          instance.prompt`
+          ${instance.prompt.messages([{ role: 'user', content: 'A' }])}
+          ${instance.prompt.messages([{ role: 'user', content: 'B' }])}
+          Question
+        `,
+      ).toThrow('Only one prompt.messages() is allowed per template');
+    });
+
+    it('throws when messages() called on next', async () => {
+      const instance = createTooledPrompt({ silent: true });
+      const { next } = await instance.prompt`Hello`();
+
+      expect(() => next.messages([{ role: 'user', content: 'injected' }])).toThrow(
+        'prompt.messages() cannot be used inside next (conversation already has history)',
+      );
     });
   });
 });

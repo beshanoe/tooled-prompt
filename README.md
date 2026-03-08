@@ -26,6 +26,8 @@ Runtime LLM prompt library with smart tool recognition for TypeScript.
   - [Providers](#providers)
   - [System Prompt](#system-prompt)
   - [Multi-Turn Conversations](#multi-turn-conversations)
+  - [Injecting Conversation History](#injecting-conversation-history)
+  - [Deferred Tool Loading](#deferred-tool-loading)
 - [API Reference](#api-reference)
 - [License](#license)
 
@@ -74,6 +76,7 @@ console.log(data);
 - **Multiple Schema Formats** — Define tool args with strings, arrays, or Zod schemas
 - **Structured Output** — Get typed responses with Zod schema validation
 - **Store Pattern** — Capture structured output via tool calls with `store()` and `prompt.return`
+- **Deferred Tool Loading** — Use `toolSearch()` so the LLM discovers tools on demand instead of sending all schemas upfront
 - **Image Support** — Pass images (Buffer/Uint8Array) directly in templates
 - **Streaming Events** — Subscribe to content, thinking, and tool events
 - **Multi-Provider** — Built-in support for OpenAI, Anthropic, and Ollama
@@ -405,6 +408,42 @@ const { data: followUp, next: next2 } = await next`What are the main concerns?`(
 const { data: deeper } = await next2`Elaborate on the first concern`();
 ```
 
+### Injecting Conversation History
+
+Use `prompt.messages()` to inject external conversation history (e.g. from a database or chat app):
+
+```typescript
+const history = [
+  { role: 'user', content: "What's the weather?" },
+  { role: 'assistant', content: "It's sunny in SF, 72°F." },
+];
+
+const { data } = await prompt`
+  ${prompt.messages(history)}
+
+  Now tell me about tomorrow's forecast using ${getWeather}.
+`();
+```
+
+The messages are prepended as conversation history. The template text becomes the new user message. Only one `prompt.messages()` is allowed per template, and it cannot be used inside `next` (which already carries history).
+
+### Deferred Tool Loading
+
+When a prompt has many tools (50+), sending all schemas upfront bloats the LLM context. `toolSearch()` wraps your tools behind a single `tool_search` meta-tool. The LLM discovers tools on demand, and matched tools become natively available in the next loop iteration:
+
+```typescript
+import { prompt, toolSearch } from 'tooled-prompt';
+
+const search = toolSearch(add, multiply, readFile, writeFile, sendEmail, queryDB);
+
+const { data } = await prompt`
+  Help the user: ${userMessage}
+  ${search}
+`();
+```
+
+The LLM sees only `tool_search(query)` initially. When it calls `tool_search("file")`, matching tools like `read_file` and `write_file` are activated and appear as native tools in subsequent requests. This keeps the initial context small while still giving the LLM access to all tools.
+
 ## API Reference
 
 ### `prompt`
@@ -482,6 +521,18 @@ tool(myFunc, { description: '...', args: ['arg1 desc', 'arg2 desc'] });
 
 // Arrow function via object syntax
 tool({ myFunc }, { description: '...', args: ['arg1 desc'] });
+```
+
+### `toolSearch`
+
+Create a deferred tool loader. Accepts raw functions or `tool()`-wrapped functions. Returns a meta-tool that the LLM calls to discover tools by keyword.
+
+```typescript
+import { toolSearch } from 'tooled-prompt';
+
+const search = toolSearch(readFile, writeFile, sendEmail);
+// Use in template: ${search}
+// LLM calls tool_search("file") → read_file and write_file become available
 ```
 
 ### `store`

@@ -37,7 +37,7 @@ describe('buildPromptText', () => {
       raw: ['Use ', ' to process data'],
     }) as TemplateStringsArray;
     const result = buildPromptText(strings, [wrapped]);
-    expect(result).toBe('Use the "myTool" tool to process data');
+    expect(result).toBe('Use the "my_tool" tool to process data');
   });
 
   it('handles multiple tools', () => {
@@ -52,7 +52,7 @@ describe('buildPromptText', () => {
       raw: ['Use ', ' and ', ' for file operations'],
     }) as TemplateStringsArray;
     const result = buildPromptText(strings, [toolA, toolB]);
-    expect(result).toBe('Use the "readFile" tool and the "writeFile" tool for file operations');
+    expect(result).toBe('Use the "read_file" tool and the "write_file" tool for file operations');
   });
 
   it('skips undefined and null values', () => {
@@ -77,10 +77,9 @@ describe('buildPromptText', () => {
     //       Summarize the files.
     //       Use tools to help.
     //   `
-    const strings = Object.assign(
-      ['\n      Summarize the files.\n      Use tools to help.\n    '],
-      { raw: ['\n      Summarize the files.\n      Use tools to help.\n    '] },
-    ) as TemplateStringsArray;
+    const strings = Object.assign(['\n      Summarize the files.\n      Use tools to help.\n    '], {
+      raw: ['\n      Summarize the files.\n      Use tools to help.\n    '],
+    }) as TemplateStringsArray;
     const result = buildPromptText(strings, []);
     expect(result).toBe('Summarize the files.\nUse tools to help.');
   });
@@ -429,7 +428,7 @@ describe('runToolLoop', () => {
     });
 
     mockFetch.mockResolvedValueOnce(
-      mockLLMResponse('', [{ id: 'call1', function: { name: 'doNothing', arguments: '{}' } }]),
+      mockLLMResponse('', [{ id: 'call1', function: { name: 'do_nothing', arguments: '{}' } }]),
     );
     mockFetch.mockResolvedValueOnce(mockLLMResponse('Done'));
 
@@ -449,7 +448,7 @@ describe('runToolLoop', () => {
     });
 
     mockFetch.mockResolvedValueOnce(
-      mockLLMResponse('', [{ id: 'call1', function: { name: 'getUser', arguments: '{}' } }]),
+      mockLLMResponse('', [{ id: 'call1', function: { name: 'get_user', arguments: '{}' } }]),
     );
     mockFetch.mockResolvedValueOnce(mockLLMResponse('Got user'));
 
@@ -503,7 +502,7 @@ describe('runToolLoop', () => {
       });
 
       mockFetch.mockResolvedValueOnce(
-        mockLLMResponse('', [{ id: 'call1', function: { name: 'readDir', arguments: '{}' } }]),
+        mockLLMResponse('', [{ id: 'call1', function: { name: 'read_dir', arguments: '{}' } }]),
       );
       mockFetch.mockResolvedValueOnce(mockLLMResponse('Found files'));
 
@@ -544,7 +543,7 @@ describe('runToolLoop', () => {
       });
 
       mockFetch.mockResolvedValueOnce(
-        mockLLMResponse('', [{ id: 'call1', function: { name: 'getText', arguments: '{}' } }]),
+        mockLLMResponse('', [{ id: 'call1', function: { name: 'get_text', arguments: '{}' } }]),
       );
       mockFetch.mockResolvedValueOnce(mockLLMResponse('Done'));
 
@@ -562,7 +561,7 @@ describe('runToolLoop', () => {
       });
 
       mockFetch.mockResolvedValueOnce(
-        mockLLMResponse('', [{ id: 'call1', function: { name: 'getList', arguments: '{}' } }]),
+        mockLLMResponse('', [{ id: 'call1', function: { name: 'get_list', arguments: '{}' } }]),
       );
       mockFetch.mockResolvedValueOnce(mockLLMResponse('Done'));
 
@@ -580,7 +579,7 @@ describe('runToolLoop', () => {
       });
 
       mockFetch.mockResolvedValueOnce(
-        mockLLMResponse('', [{ id: 'call1', function: { name: 'getObj', arguments: '{}' } }]),
+        mockLLMResponse('', [{ id: 'call1', function: { name: 'get_obj', arguments: '{}' } }]),
       );
       mockFetch.mockResolvedValueOnce(mockLLMResponse('Done'));
 

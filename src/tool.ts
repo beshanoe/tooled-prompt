@@ -29,6 +29,17 @@ export { TOOL_SYMBOL, type ToolMetadata, type ToolFunction };
 let anonymousCounter = 0;
 
 /**
+ * Convert camelCase/PascalCase to snake_case.
+ * Already-snake_case names pass through unchanged.
+ */
+export function toSnakeCase(name: string): string {
+  return name
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1_$2')
+    .toLowerCase();
+}
+
+/**
  * Reset anonymous counter (useful for testing)
  */
 export function resetAnonymousCounter(): void {
@@ -155,7 +166,8 @@ function toolImpl<T extends (...args: any[]) => any>(
   const parsed = parseFunction(fn);
 
   // Use explicit name, then fn.name, otherwise generate "tool_N"
-  const name = explicitName || fn.name || `tool_${++anonymousCounter}`;
+  const rawName = explicitName || fn.name || `tool_${++anonymousCounter}`;
+  const name = toSnakeCase(rawName);
 
   let parameters: JsonSchema;
   if (schema) {

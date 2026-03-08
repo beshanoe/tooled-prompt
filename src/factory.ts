@@ -31,6 +31,8 @@ import { buildPromptText, runToolLoop } from './executor.js';
 import { processImageValues } from './image.js';
 import { TooledPromptEmitter, installDefaultHandlers, type TooledPromptEvents } from './events.js';
 import { RETURN_SYMBOL, RETURN_SENTINEL, createStore } from './store.js';
+import { MESSAGES_SYMBOL, createMessagesSentinel, type MessagesSentinel } from './messages.js';
+import { getProvider } from './providers/index.js';
 
 /**
  * Default configuration values
@@ -128,10 +130,13 @@ export function createTooledPrompt(initialConfig: TooledPromptConfig = {}): Tool
   // Event emitter for this instance
   const emitter = new TooledPromptEmitter();
 
+  // Per-call config stash so default handlers can see it during execution
+  let activePerCallConfig: TooledPromptConfig = {};
+
   // Auto-install default logging handlers (gated by config)
   installDefaultHandlers(emitter, {
-    isSilent: () => resolveConfig().silent,
-    showThinking: () => resolveConfig().showThinking,
+    isSilent: () => resolveConfig(activePerCallConfig).silent,
+    showThinking: () => resolveConfig(activePerCallConfig).showThinking,
   });
 
   /**
@@ -233,9 +238,10 @@ export function createTooledPrompt(initialConfig: TooledPromptConfig = {}): Tool
   function extractTemplateTools(
     strings: TemplateStringsArray,
     values: unknown[],
-  ): { tools: ToolFunction[]; returnIndices: number[] } {
+  ): { tools: ToolFunction[]; returnIndices: number[]; messagesIndex: number | undefined } {
     const tools: ToolFunction[] = [];
     const returnIndices: number[] = [];
+    let messagesIndex: number | undefined;
 
     for (let i = 0; i < values.length; i++) {
       const value = values[i];
@@ -243,6 +249,15 @@ export function createTooledPrompt(initialConfig: TooledPromptConfig = {}): Tool
       // Detect return sentinel
       if (typeof value === 'object' && value !== null && RETURN_SYMBOL in value) {
         returnIndices.push(i);
+        continue;
+      }
+
+      // Detect messages sentinel
+      if (typeof value === 'object' && value !== null && MESSAGES_SYMBOL in value) {
+        if (messagesIndex !== undefined) {
+          throw new Error('Only one prompt.messages() is allowed per template');
+        }
+        messagesIndex = i;
         continue;
       }
 
@@ -275,7 +290,7 @@ export function createTooledPrompt(initialConfig: TooledPromptConfig = {}): Tool
       }
     }
 
-    return { tools, returnIndices };
+    return { tools, returnIndices, messagesIndex };
   }
 
   /**
@@ -301,6 +316,7 @@ export function createTooledPrompt(initialConfig: TooledPromptConfig = {}): Tool
     values: unknown[];
     tools: ToolFunction[];
     returnIndices: number[];
+    messagesIndex: number | undefined;
     includeSystemPrompt?: boolean;
     history?: unknown[];
   }
@@ -327,64 +343,96 @@ export function createTooledPrompt(initialConfig: TooledPromptConfig = {}): Tool
       const resolvedConfig = resolveConfig(perCallConfig);
       const configTools = collectConfigTools(perCallConfig);
 
-      // Resolve system prompt (only on first call, not continuations)
-      let systemContent: PromptContent | undefined;
-      let systemImages: ContentPart[] | undefined;
-      let systemTools: ToolFunction[] = [];
-      if (params.includeSystemPrompt) {
-        const sp = resolveSystemPrompt(resolvedConfig);
-        systemContent = sp.systemContent;
-        systemImages = sp.systemImages.length > 0 ? sp.systemImages : undefined;
-        systemTools = sp.systemTools;
-      }
+      // Expose per-call config to default handlers (silent, showThinking)
+      activePerCallConfig = perCallConfig;
 
-      const baseTools = [...params.tools, ...systemTools];
-
-      // Handle return sentinels
-      if (params.returnIndices.length > 0) {
-        if (!resolved) {
-          throw new Error('prompt.return requires a schema — pass a Zod schema or SimpleSchema to the executor');
+      try {
+        // Resolve system prompt (only on first call, not continuations)
+        let systemContent: PromptContent | undefined;
+        let systemImages: ContentPart[] | undefined;
+        let systemTools: ToolFunction[] = [];
+        if (params.includeSystemPrompt) {
+          const sp = resolveSystemPrompt(resolvedConfig);
+          systemContent = sp.systemContent;
+          systemImages = sp.systemImages.length > 0 ? sp.systemImages : undefined;
+          systemTools = sp.systemTools;
         }
 
-        const resolvedValues = [...params.values];
-        const returnStore = createStore<T>('return_value', resolved);
+        const baseTools = [...params.tools, ...systemTools];
 
-        for (const i of params.returnIndices) {
-          resolvedValues[i] = returnStore;
+        // Handle messages sentinel
+        let messagesHistory: unknown[] | undefined;
+        if (params.messagesIndex !== undefined) {
+          const sentinel = params.values[params.messagesIndex] as MessagesSentinel;
+          const provider = getProvider(resolvedConfig.provider);
+          messagesHistory = sentinel.messages.map((msg) =>
+            msg.role === 'user'
+              ? provider.formatUserMessage(msg.content)
+              : provider.formatAssistantMessage(msg.content, []),
+          );
+          // Replace sentinel in values with empty string so it doesn't appear in prompt text
+          params.values = [...params.values];
+          params.values[params.messagesIndex] = '';
         }
 
-        const allTools = [...baseTools, ...configTools, returnStore as unknown as ToolFunction];
-        const processed = await processImageValues(resolvedValues);
-        const promptText = buildPromptText(params.strings, processed);
-        const { result, messages } = await runToolLoop<T>(
+        // Also strip return sentinels from values
+        if (params.returnIndices.length > 0) {
+          if (!messagesHistory) {
+            // Only copy if we haven't already copied above
+            params.values = [...params.values];
+          }
+        }
+
+        // Handle return sentinels
+        if (params.returnIndices.length > 0) {
+          if (!resolved) {
+            throw new Error('prompt.return requires a schema — pass a Zod schema or SimpleSchema to the executor');
+          }
+
+          const resolvedValues = [...params.values];
+          const returnStore = createStore<T>('return_value', resolved);
+
+          for (const i of params.returnIndices) {
+            resolvedValues[i] = returnStore;
+          }
+
+          const allTools = [...baseTools, ...configTools, returnStore as unknown as ToolFunction];
+          const processed = await processImageValues(resolvedValues);
+          const promptText = buildPromptText(params.strings, processed);
+          const historyToUse = messagesHistory || params.history;
+          const { result, messages } = await runToolLoop<T>(
+            promptText,
+            allTools,
+            resolvedConfig,
+            emitter,
+            undefined,
+            returnStore,
+            systemContent,
+            systemImages,
+            historyToUse,
+          );
+          return { data: result, next: buildNext(messages, allTools) };
+        }
+
+        const allTools = [...baseTools, ...configTools];
+        const processedValues = await processImageValues(params.values);
+        const promptText = buildPromptText(params.strings, processedValues);
+        const historyToUse = messagesHistory || params.history;
+        const { result, messages } = await runToolLoop(
           promptText,
           allTools,
           resolvedConfig,
           emitter,
+          resolved,
           undefined,
-          returnStore,
           systemContent,
           systemImages,
-          params.history,
+          historyToUse,
         );
         return { data: result, next: buildNext(messages, allTools) };
+      } finally {
+        activePerCallConfig = {};
       }
-
-      const allTools = [...baseTools, ...configTools];
-      const processedValues = await processImageValues(params.values);
-      const promptText = buildPromptText(params.strings, processedValues);
-      const { result, messages } = await runToolLoop(
-        promptText,
-        allTools,
-        resolvedConfig,
-        emitter,
-        resolved,
-        undefined,
-        systemContent,
-        systemImages,
-        params.history,
-      );
-      return { data: result, next: buildNext(messages, allTools) };
     };
 
     return execute as PromptExecutor;
@@ -395,7 +443,7 @@ export function createTooledPrompt(initialConfig: TooledPromptConfig = {}): Tool
    */
   function buildNext(prevMessages: unknown[], prevTools: ToolFunction[]): PromptTaggedTemplate {
     function next(strings: TemplateStringsArray, ...values: unknown[]): PromptExecutor {
-      const { tools: newTools, returnIndices } = extractTemplateTools(strings, values);
+      const { tools: newTools, returnIndices, messagesIndex } = extractTemplateTools(strings, values);
       const mergedTools = deduplicateTools(prevTools, newTools);
 
       return makeExecutor({
@@ -403,12 +451,16 @@ export function createTooledPrompt(initialConfig: TooledPromptConfig = {}): Tool
         values,
         tools: mergedTools,
         returnIndices,
+        messagesIndex,
         history: prevMessages,
         includeSystemPrompt: true,
       });
     }
 
     (next as any).return = RETURN_SENTINEL;
+    (next as any).messages = () => {
+      throw new Error('prompt.messages() cannot be used inside next (conversation already has history)');
+    };
     return next as PromptTaggedTemplate;
   }
 
@@ -416,19 +468,21 @@ export function createTooledPrompt(initialConfig: TooledPromptConfig = {}): Tool
    * Tagged template for defining LLM prompts
    */
   function prompt(strings: TemplateStringsArray, ...values: unknown[]): PromptExecutor {
-    const { tools, returnIndices } = extractTemplateTools(strings, values);
+    const { tools, returnIndices, messagesIndex } = extractTemplateTools(strings, values);
 
     return makeExecutor({
       strings,
       values,
       tools,
       returnIndices,
+      messagesIndex,
       includeSystemPrompt: true,
     });
   }
 
-  // Attach return sentinel to prompt
+  // Attach return sentinel and messages factory to prompt
   (prompt as any).return = RETURN_SENTINEL;
+  (prompt as any).messages = createMessagesSentinel;
 
   /**
    * Subscribe to an event

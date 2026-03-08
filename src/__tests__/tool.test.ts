@@ -26,7 +26,7 @@ describe('tool', () => {
       }
       const wrapped = tool(fetchData);
       expect(isTool(wrapped)).toBe(true);
-      expect(getToolMetadata(wrapped).name).toBe('fetchData');
+      expect(getToolMetadata(wrapped).name).toBe('fetch_data');
     });
 
     it('returns same function if already a tool', () => {
@@ -207,7 +207,7 @@ describe('tool', () => {
     it('extracts name from object key', () => {
       const myFunc = (x: string) => x.toUpperCase();
       const wrapped = tool({ myFunc });
-      expect(getToolMetadata(wrapped).name).toBe('myFunc');
+      expect(getToolMetadata(wrapped).name).toBe('my_func');
     });
 
     it('works with options', () => {

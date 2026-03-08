@@ -40,6 +40,12 @@ export { tool, isTool, getToolMetadata, TOOL_SYMBOL } from './tool.js';
 // Store pattern for capturing structured output
 export { store, createStore, RETURN_SYMBOL, RETURN_SENTINEL, type Store } from './store.js';
 
+// Messages sentinel for injecting conversation history
+export { MESSAGES_SYMBOL, createMessagesSentinel, type HistoryMessage, type MessagesSentinel } from './messages.js';
+
+// Deferred tool loading
+export { toolSearch, TOOLBOX_SYMBOL, type ToolSearchMatcher, type ToolSearchOptions } from './toolbox.js';
+
 // Types
 export type {
   ToolFunction,

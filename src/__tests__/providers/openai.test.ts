@@ -243,6 +243,24 @@ describe('OpenAIProvider', () => {
     });
   });
 
+  describe('history formatting for prompt.messages()', () => {
+    it('formats history messages correctly', () => {
+      const history = [
+        { role: 'user', content: 'Hello' },
+        { role: 'assistant', content: 'Hi there!' },
+      ];
+      const formatted = history.map((msg) =>
+        msg.role === 'user'
+          ? provider.formatUserMessage(msg.content)
+          : provider.formatAssistantMessage(msg.content, []),
+      );
+      expect(formatted).toEqual([
+        { role: 'user', content: 'Hello' },
+        { role: 'assistant', content: 'Hi there!', tool_calls: undefined },
+      ]);
+    });
+  });
+
   describe('formatToolResults', () => {
     it('formats results as tool messages', () => {
       const results = provider.formatToolResults([{ id: 'call_1', name: 'greet', result: 'Hello, World!' }]);

@@ -20,6 +20,7 @@ import type { Store } from './store.js';
 import { isImageMarker } from './image.js';
 import { getProvider } from './providers/index.js';
 import type { ToolResultInfo } from './providers/types.js';
+import { TOOLBOX_SYMBOL, type ToolboxFunction } from './toolbox.js';
 
 // Re-export parseSSEStream for backward compatibility
 export { parseSSEStream } from './streaming.js';
@@ -327,6 +328,22 @@ export async function runToolLoop<T = string>(
           name: toolCall.name,
           result: JSON.stringify({ error: error.message }),
         });
+      }
+    }
+
+    // Toolbox expansion: drain pending tools from any toolbox meta-tools
+    for (const toolFn of tools) {
+      if (TOOLBOX_SYMBOL in toolFn) {
+        const box = (toolFn as ToolboxFunction)[TOOLBOX_SYMBOL];
+        if (box.pending.length > 0) {
+          const existingNames = new Set(tools.map((t) => t[TOOL_SYMBOL].name));
+          const newTools = box.pending.filter((t) => !existingNames.has(t[TOOL_SYMBOL].name));
+          tools.push(...newTools);
+          // Rebuild toolMeta in-place
+          toolMeta.length = 0;
+          toolMeta.push(...tools.map((t) => t[TOOL_SYMBOL]));
+          box.pending.length = 0;
+        }
       }
     }
 

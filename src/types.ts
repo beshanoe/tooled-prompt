@@ -5,6 +5,7 @@
 import type { ZodType } from 'zod';
 import { requireZod } from './zod.js';
 import type { TooledPromptEvents } from './events.js';
+import type { HistoryMessage, MessagesSentinel } from './messages.js';
 
 /**
  * Object containing a single named function for tool() syntax
@@ -306,6 +307,8 @@ export interface ExecutionResult {
 export type PromptTaggedTemplate = ((strings: TemplateStringsArray, ...values: unknown[]) => PromptExecutor) & {
   /** Sentinel value — use in template to capture structured output via a store tool */
   readonly return: object;
+  /** Create a messages sentinel to inject conversation history */
+  readonly messages: (messages: HistoryMessage[]) => MessagesSentinel;
 };
 
 /**
@@ -338,7 +341,7 @@ export interface PromptExecutor {
  * A tooled-prompt instance with its own configuration
  */
 export interface TooledPromptInstance {
-  /** Tagged template for creating prompts, with `.return` sentinel for structured output */
+  /** Tagged template for creating prompts, with `.return` sentinel and `.messages()` for history injection */
   prompt: PromptTaggedTemplate;
   /** Tool wrapper function */
   tool: typeof import('./tool.js').tool;

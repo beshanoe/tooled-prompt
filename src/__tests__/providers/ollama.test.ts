@@ -175,6 +175,24 @@ describe('OllamaProvider', () => {
     });
   });
 
+  describe('history formatting for prompt.messages()', () => {
+    it('formats history messages correctly', () => {
+      const history = [
+        { role: 'user', content: 'Hello' },
+        { role: 'assistant', content: 'Hi there!' },
+      ];
+      const formatted = history.map((msg) =>
+        msg.role === 'user'
+          ? provider.formatUserMessage(msg.content)
+          : provider.formatAssistantMessage(msg.content, []),
+      );
+      expect(formatted).toEqual([
+        { role: 'user', content: 'Hello' },
+        { role: 'assistant', content: 'Hi there!' },
+      ]);
+    });
+  });
+
   describe('formatToolResults', () => {
     it('formats as simple tool role messages', () => {
       const results = provider.formatToolResults([{ id: 'ollama_0', name: 'greet', result: 'Hello!' }]);

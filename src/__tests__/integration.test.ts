@@ -153,7 +153,7 @@ describe('integration', () => {
           {
             id: 'call1',
             function: {
-              name: 'withOptional',
+              name: 'with_optional',
               arguments: '{"required":"value"}', // optional not provided
             },
           },
@@ -347,8 +347,8 @@ describe('integration', () => {
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.tools).toHaveLength(1);
-      expect(body.tools[0].function.name).toBe('fetchFileContents');
-      expect(body.messages[0].content).toContain('the "fetchFileContents" tool');
+      expect(body.tools[0].function.name).toBe('fetch_file_contents');
+      expect(body.messages[0].content).toContain('the "fetch_file_contents" tool');
     });
 
     it('auto-wraps plain functions as tools', async () => {

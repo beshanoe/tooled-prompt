@@ -118,8 +118,8 @@ describe('systemPrompt', () => {
       // Should have both tools: formatTool from prompt + searchTool from systemPrompt
       expect(body.tools).toHaveLength(2);
       const toolNames = body.tools.map((t: any) => t.function.name);
-      expect(toolNames).toContain('formatTool');
-      expect(toolNames).toContain('searchTool');
+      expect(toolNames).toContain('format_tool');
+      expect(toolNames).toContain('search_tool');
     });
 
     it('replaces tool refs with natural language in system prompt text', async () => {
@@ -142,7 +142,7 @@ describe('systemPrompt', () => {
       // System message should have tool ref replaced
       const systemMsg = body.messages[0];
       expect(systemMsg.role).toBe('system');
-      expect(systemMsg.content).toBe('Use the "searchTool" tool to find info.');
+      expect(systemMsg.content).toBe('Use the "search_tool" tool to find info.');
     });
 
     it('plain string interpolation in system prompt works', async () => {
