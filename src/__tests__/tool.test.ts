@@ -201,6 +201,13 @@ describe('tool', () => {
       });
       expect((metadata.parameters.properties.count as any).description).toBe('Repeat count');
     });
+    it('marks z.optional() args as not required', () => {
+      const wrapped = tool((name: string, title?: string) => `${title} ${name}`, {
+        args: [z.string().describe('Full name'), z.string().optional().describe('Optional title')],
+      });
+      const metadata = getToolMetadata(wrapped);
+      expect(metadata.parameters.required).toEqual(['name']);
+    });
   });
 
   describe('object syntax { fn }', () => {

@@ -197,7 +197,8 @@ function toolImpl<T extends (...args: any[]) => any>(
         const paramName = (meta as any)?.name || parsedParam?.name || `arg${i}`;
         const jsonSchema = z.toJSONSchema(zodSchema);
         properties[paramName] = jsonSchema;
-        if (!parsedParam?.optional) required.push(paramName);
+        const isZodOptional = (zodSchema as any)._zod?.def?.type === 'optional';
+        if (!parsedParam?.optional && !isZodOptional) required.push(paramName);
       }
     }
 

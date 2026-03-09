@@ -46,9 +46,19 @@ export type ArgDescriptor = string | [string, string] | ZodType;
 type ArgDescriptorTuple<T extends any[]> = T extends []
   ? []
   : T extends [infer H, ...infer R extends any[]]
-    ? [string | [string, string] | { _zod: { output: H } }, ...ArgDescriptorTuple<R>]
+    ? [
+        string | [string, string] | { _zod: { output: H } } | { _zod: { output: H | undefined } },
+        ...ArgDescriptorTuple<R>,
+      ]
     : T extends [(infer H)?]
-      ? [(string | [string, string] | { _zod: { output: NonNullable<H> } })?]
+      ? [
+          (
+            | string
+            | [string, string]
+            | { _zod: { output: NonNullable<H> } }
+            | { _zod: { output: NonNullable<H> | undefined } }
+          )?,
+        ]
       : [];
 
 /**
