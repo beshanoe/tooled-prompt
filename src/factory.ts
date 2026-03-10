@@ -361,7 +361,21 @@ export function createTooledPrompt(initialConfig: TooledPromptConfig = {}): Tool
           systemTools = sp.systemTools;
         }
 
-        const baseTools = [...params.tools, ...systemTools];
+        // Deduplicate tools by name across all sources. On `next` calls,
+        // system/config tools are already in params.tools (carried forward via
+        // prevTools/allTools), so re-appending them would send duplicate tool
+        // schemas to the LLM, wasting tokens on every subsequent request.
+        const baseTools: ToolFunction[] = [];
+        {
+          const seenNames = new Set<string>();
+          for (const t of [...params.tools, ...systemTools, ...configTools]) {
+            const name = t[TOOL_SYMBOL].name;
+            if (!seenNames.has(name)) {
+              seenNames.add(name);
+              baseTools.push(t);
+            }
+          }
+        }
 
         // Handle messages sentinel
         let messagesHistory: unknown[] | undefined;
@@ -399,7 +413,7 @@ export function createTooledPrompt(initialConfig: TooledPromptConfig = {}): Tool
             resolvedValues[i] = returnStore;
           }
 
-          const allTools = [...baseTools, ...configTools, returnStore as unknown as ToolFunction];
+          const allTools = [...baseTools, returnStore as unknown as ToolFunction];
           const processed = await processImageValues(resolvedValues);
           const promptText = buildPromptText(params.strings, processed);
           const historyToUse = messagesHistory || params.history;
@@ -426,7 +440,7 @@ export function createTooledPrompt(initialConfig: TooledPromptConfig = {}): Tool
           };
         }
 
-        const allTools = [...baseTools, ...configTools];
+        const allTools = [...baseTools];
         const processedValues = await processImageValues(params.values);
         const promptText = buildPromptText(params.strings, processedValues);
         const historyToUse = messagesHistory || params.history;

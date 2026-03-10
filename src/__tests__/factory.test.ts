@@ -329,6 +329,47 @@ describe('createTooledPrompt', () => {
       expect(greetTools[0].function.description).toBe('v2');
     });
 
+    it('next does not duplicate config tools', async () => {
+      const configTool = tool({ configHelper: () => 'help' }, { description: 'from config' });
+      const instance = createTooledPrompt({ silent: true, tools: [configTool] });
+
+      const templateTool = tool({ greetPerson: (name: string) => `Hi ${name}` });
+      const { next } = await instance.prompt`Use ${templateTool}`();
+
+      // On the next call, config tool should NOT be duplicated
+      await next`Follow up`();
+
+      const secondCall = mockFetch.mock.calls[1];
+      const body = JSON.parse(secondCall[1].body);
+      const allToolNames = (body.tools || []).map((t: any) => t.function.name);
+      const configToolCount = allToolNames.filter((n: string) => n === 'config_helper').length;
+      expect(configToolCount).toBe(1);
+      // Both tools should still be present
+      expect(allToolNames).toContain('greet_person');
+      expect(allToolNames).toContain('config_helper');
+    });
+
+    it('next does not duplicate system prompt tools', async () => {
+      const sysTool = tool({ sysHelper: () => 'sys' }, { description: 'from system' });
+      const instance = createTooledPrompt({
+        silent: true,
+        systemPrompt: (sp) => sp`You are helpful. Use ${sysTool}`,
+      });
+
+      const templateTool = tool({ greetPerson: (name: string) => `Hi ${name}` });
+      const { next } = await instance.prompt`Use ${templateTool}`();
+
+      await next`Follow up`();
+
+      const secondCall = mockFetch.mock.calls[1];
+      const body = JSON.parse(secondCall[1].body);
+      const allToolNames = (body.tools || []).map((t: any) => t.function.name);
+      const sysToolCount = allToolNames.filter((n: string) => n === 'sys_helper').length;
+      expect(sysToolCount).toBe(1);
+      expect(allToolNames).toContain('greet_person');
+      expect(allToolNames).toContain('sys_helper');
+    });
+
     it('next can add new tools', async () => {
       const instance = createTooledPrompt({ silent: true });
       const greetPerson = (name: string) => `Hi ${name}`;
