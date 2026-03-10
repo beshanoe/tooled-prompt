@@ -28,6 +28,7 @@ Runtime LLM prompt library with smart tool recognition for TypeScript.
   - [Multi-Turn Conversations](#multi-turn-conversations)
   - [Injecting Conversation History](#injecting-conversation-history)
   - [Deferred Tool Loading](#deferred-tool-loading)
+  - [Usage Tracking](#usage-tracking)
 - [API Reference](#api-reference)
 - [License](#license)
 
@@ -77,6 +78,7 @@ console.log(data);
 - **Structured Output** — Get typed responses with Zod schema validation
 - **Store Pattern** — Capture structured output via tool calls with `store()` and `prompt.return`
 - **Deferred Tool Loading** — Use `toolSearch()` so the LLM discovers tools on demand instead of sending all schemas upfront
+- **Usage Tracking** — Per-call and cumulative token usage across conversation chains
 - **Image Support** — Pass images (Buffer/Uint8Array) directly in templates
 - **Streaming Events** — Subscribe to content, thinking, and tool events
 - **Multi-Provider** — Built-in support for OpenAI, Anthropic, and Ollama
@@ -444,6 +446,40 @@ const { data } = await prompt`
 
 The LLM sees only `tool_search(query)` initially. When it calls `tool_search("file")`, matching tools like `read_file` and `write_file` are activated and appear as native tools in subsequent requests. This keeps the initial context small while still giving the LLM access to all tools.
 
+### Usage Tracking
+
+Every `PromptResult` includes token usage with per-call and cumulative breakdowns:
+
+```typescript
+const r1 = await prompt`What is the capital of France?`();
+
+console.log(r1.usage?.call);
+// => { promptTokens: 14, completionTokens: 8, totalTokens: 22 }
+
+// On the first call, cumulative equals call
+console.log(r1.usage?.cumulative);
+// => { promptTokens: 14, completionTokens: 8, totalTokens: 22 }
+```
+
+Cumulative usage tracks totals across chained `next` calls:
+
+```typescript
+const r2 = await r1.next`And what is its population?`();
+
+console.log(r2.usage?.call); // tokens for this call only
+console.log(r2.usage?.cumulative); // total across both calls
+```
+
+Use cumulative usage to implement context budgeting:
+
+```typescript
+if ((r2.usage?.cumulative.totalTokens ?? 0) > 4000) {
+  console.log('Context getting large, consider compaction');
+}
+```
+
+Usage is `undefined` when the provider doesn't include token counts in the response. When a single prompt invocation triggers multiple LLM requests (tool-loop iterations), the call usage is the sum across all iterations.
+
 ## API Reference
 
 ### `prompt`
@@ -587,8 +623,23 @@ All prompt executions return a `PromptResult<T>` wrapper:
 ```typescript
 interface PromptResult<T> {
   data?: T;
+  /** Token usage for this call and cumulative across the conversation chain */
+  usage?: PromptUsage;
   /** Continue the conversation with a follow-up prompt, preserving history and tools */
   next: PromptTaggedTemplate;
+}
+
+interface PromptUsage {
+  /** Tokens used in this prompt/next invocation (including all tool-loop iterations) */
+  call: Usage;
+  /** Total tokens across the entire conversation chain (prompt + all next calls) */
+  cumulative: Usage;
+}
+
+interface Usage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
 }
 ```
 

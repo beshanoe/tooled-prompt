@@ -12,6 +12,7 @@ import type {
   ToolCallInfo,
   ToolResultInfo,
   ParsedResponse,
+  Usage,
   BuildRequestParams,
   BuildRequestResult,
 } from './types.js';
@@ -29,10 +30,14 @@ interface OllamaResponseMessage {
 interface OllamaStreamChunk {
   done?: boolean;
   message?: OllamaResponseMessage;
+  prompt_eval_count?: number;
+  eval_count?: number;
 }
 
 interface OllamaResponse {
   message?: OllamaResponseMessage;
+  prompt_eval_count?: number;
+  eval_count?: number;
 }
 
 export type OllamaMessage =
@@ -151,6 +156,7 @@ export class OllamaProvider implements ProviderAdapter<OllamaMessage> {
   async parseResponse(response: Response, streaming: boolean, emitter: TooledPromptEmitter): Promise<ParsedResponse> {
     let content = '';
     const toolCalls: ToolCallInfo[] = [];
+    let usage: Usage | undefined;
 
     if (streaming && response.body) {
       // Ollama uses NDJSON (newline-delimited JSON), not SSE
@@ -195,7 +201,15 @@ export class OllamaProvider implements ProviderAdapter<OllamaMessage> {
             }
           }
 
-          if (parsed.done) break;
+          // Usage arrives in the final chunk (done: true)
+          if (parsed.done) {
+            const promptTokens = parsed.prompt_eval_count ?? 0;
+            const completionTokens = parsed.eval_count ?? 0;
+            if (promptTokens || completionTokens) {
+              usage = { promptTokens, completionTokens, totalTokens: promptTokens + completionTokens };
+            }
+            break;
+          }
         }
       }
 
@@ -225,11 +239,17 @@ export class OllamaProvider implements ProviderAdapter<OllamaMessage> {
         }
       }
 
+      const promptTokens = data.prompt_eval_count ?? 0;
+      const completionTokens = data.eval_count ?? 0;
+      if (promptTokens || completionTokens) {
+        usage = { promptTokens, completionTokens, totalTokens: promptTokens + completionTokens };
+      }
+
       if (content) {
         emitter.emit('content', content + '\n');
       }
     }
 
-    return { content, toolCalls };
+    return { content, toolCalls, usage };
   }
 }

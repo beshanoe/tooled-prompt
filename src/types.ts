@@ -6,6 +6,7 @@ import type { ZodType } from 'zod';
 import { requireZod } from './zod.js';
 import type { TooledPromptEvents } from './events.js';
 import type { HistoryMessage, MessagesSentinel } from './messages.js';
+import type { Usage } from './providers/types.js';
 
 /**
  * Object containing a single named function for tool() syntax
@@ -321,12 +322,35 @@ export type PromptTaggedTemplate = ((strings: TemplateStringsArray, ...values: u
   readonly messages: (messages: HistoryMessage[]) => MessagesSentinel;
 };
 
+export type { Usage };
+
+/**
+ * Token usage breakdown for a prompt result.
+ * - `call`: tokens used in this specific prompt/next invocation (including all tool-loop iterations)
+ * - `cumulative`: total tokens across the entire conversation chain (prompt + all next calls)
+ */
+export interface PromptUsage {
+  call: Usage;
+  cumulative: Usage;
+}
+
 /**
  * Wrapper for prompt execution results.
- * Provides an extensible envelope that will later include tool usage stats and other metadata.
+ *
+ * @example
+ * ```ts
+ * const r1 = await prompt`Summarize: ${text}`();
+ * console.log(r1.usage?.call.totalTokens);       // tokens for this call
+ * console.log(r1.usage?.cumulative.totalTokens);  // same as call for first prompt
+ *
+ * const r2 = await r1.next`Now extract entities`();
+ * console.log(r2.usage?.cumulative.totalTokens);  // total across both calls
+ * ```
  */
 export interface PromptResult<T> {
   data?: T;
+  /** Token usage for this call and cumulative across the conversation chain */
+  usage?: PromptUsage;
   /** Continue the conversation with a follow-up prompt, preserving history and tools */
   next: PromptTaggedTemplate;
 }

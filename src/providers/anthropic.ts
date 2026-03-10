@@ -12,6 +12,7 @@ import type {
   ToolCallInfo,
   ToolResultInfo,
   ParsedResponse,
+  Usage,
   BuildRequestParams,
   BuildRequestResult,
 } from './types.js';
@@ -181,13 +182,25 @@ export class AnthropicProvider implements ProviderAdapter<AnthropicMessage> {
   async parseResponse(response: Response, streaming: boolean, emitter: TooledPromptEmitter): Promise<ParsedResponse> {
     let content = '';
     const toolCalls: ToolCallInfo[] = [];
+    let usage: Usage | undefined;
 
     if (streaming && response.body) {
       const reader = response.body.getReader();
       let currentToolIndex = -1;
+      let inputTokens = 0;
+      let outputTokens = 0;
 
       for await (const parsed of parseSSEStream(reader)) {
         switch (parsed.type) {
+          case 'message_start': {
+            // Initial usage from message_start event
+            const u = parsed.message?.usage;
+            if (u) {
+              inputTokens = u.input_tokens ?? 0;
+              outputTokens = u.output_tokens ?? 0;
+            }
+            break;
+          }
           case 'content_block_start': {
             const block = parsed.content_block;
             if (block?.type === 'tool_use') {
@@ -217,9 +230,25 @@ export class AnthropicProvider implements ProviderAdapter<AnthropicMessage> {
           case 'content_block_stop':
             currentToolIndex = -1;
             break;
+          case 'message_delta': {
+            // Final output token count from message_delta
+            const u = parsed.usage;
+            if (u?.output_tokens) {
+              outputTokens = u.output_tokens;
+            }
+            break;
+          }
           case 'message_stop':
             break;
         }
+      }
+
+      if (inputTokens || outputTokens) {
+        usage = {
+          promptTokens: inputTokens,
+          completionTokens: outputTokens,
+          totalTokens: inputTokens + outputTokens,
+        };
       }
 
       if (content) {
@@ -235,6 +264,7 @@ export class AnthropicProvider implements ProviderAdapter<AnthropicMessage> {
           name?: string;
           input?: Record<string, unknown>;
         }>;
+        usage?: { input_tokens?: number; output_tokens?: number };
       };
 
       if (!data.content) {
@@ -253,11 +283,21 @@ export class AnthropicProvider implements ProviderAdapter<AnthropicMessage> {
         }
       }
 
+      if (data.usage) {
+        const inputTokens = data.usage.input_tokens ?? 0;
+        const outputTokens = data.usage.output_tokens ?? 0;
+        usage = {
+          promptTokens: inputTokens,
+          completionTokens: outputTokens,
+          totalTokens: inputTokens + outputTokens,
+        };
+      }
+
       if (content) {
         emitter.emit('content', content + '\n');
       }
     }
 
-    return { content, toolCalls };
+    return { content, toolCalls, usage };
   }
 }

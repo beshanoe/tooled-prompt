@@ -68,6 +68,8 @@ export type {
   ProcessedSystemPrompt,
   SystemPromptBuilder,
   SystemPromptTag,
+  Usage,
+  PromptUsage,
 } from './types.js';
 
 // Provider system

@@ -12,6 +12,7 @@ import type {
   ToolCallInfo,
   ToolResultInfo,
   ParsedResponse,
+  Usage,
   BuildRequestParams,
   BuildRequestResult,
 } from './types.js';
@@ -48,6 +49,7 @@ export class OpenAIProvider implements ProviderAdapter<OpenAIMessage> {
       model: params.modelName,
       messages,
       stream: params.stream,
+      ...(params.stream && { stream_options: { include_usage: true } }),
       ...(params.temperature !== undefined && { temperature: params.temperature }),
       ...(params.maxTokens !== undefined && { max_tokens: params.maxTokens }),
     };
@@ -114,11 +116,21 @@ export class OpenAIProvider implements ProviderAdapter<OpenAIMessage> {
   async parseResponse(response: Response, streaming: boolean, emitter: TooledPromptEmitter): Promise<ParsedResponse> {
     let content = '';
     let toolCalls: ToolCallInfo[] = [];
+    let usage: Usage | undefined;
 
     if (streaming && response.body) {
       const reader = response.body.getReader();
 
       for await (const chunk of parseSSEStream(reader)) {
+        // Capture usage from the final chunk (sent when stream_options.include_usage is true)
+        if (chunk.usage) {
+          usage = {
+            promptTokens: chunk.usage.prompt_tokens ?? 0,
+            completionTokens: chunk.usage.completion_tokens ?? 0,
+            totalTokens: chunk.usage.total_tokens ?? 0,
+          };
+        }
+
         const delta = chunk.choices?.[0]?.delta;
         if (!delta) continue;
 
@@ -168,6 +180,7 @@ export class OpenAIProvider implements ProviderAdapter<OpenAIMessage> {
             }>;
           };
         }>;
+        usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
       };
       const choice = data.choices?.[0];
 
@@ -182,11 +195,19 @@ export class OpenAIProvider implements ProviderAdapter<OpenAIMessage> {
         arguments: tc.function.arguments,
       }));
 
+      if (data.usage) {
+        usage = {
+          promptTokens: data.usage.prompt_tokens ?? 0,
+          completionTokens: data.usage.completion_tokens ?? 0,
+          totalTokens: data.usage.total_tokens ?? 0,
+        };
+      }
+
       if (content) {
         emitter.emit('content', content + '\n');
       }
     }
 
-    return { content, toolCalls };
+    return { content, toolCalls, usage };
   }
 }

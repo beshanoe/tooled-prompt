@@ -20,9 +20,16 @@ export interface ToolResultInfo {
   result: string;
 }
 
+export interface Usage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
 export interface ParsedResponse {
   content: string;
   toolCalls: ToolCallInfo[];
+  usage?: Usage;
 }
 
 export interface BuildRequestParams {

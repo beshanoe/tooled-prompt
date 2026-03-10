@@ -22,6 +22,8 @@ import {
   type ContentPart,
   type PromptContent,
   type ProcessedSystemPrompt,
+  type PromptUsage,
+  type Usage,
   isZodSchema,
   isSimpleSchema,
   resolveSchema,
@@ -319,6 +321,7 @@ export function createTooledPrompt(initialConfig: TooledPromptConfig = {}): Tool
     messagesIndex: number | undefined;
     includeSystemPrompt?: boolean;
     history?: unknown[];
+    prevCumulativeUsage?: Usage;
   }
 
   function makeExecutor(params: ExecuteParams): PromptExecutor {
@@ -400,7 +403,11 @@ export function createTooledPrompt(initialConfig: TooledPromptConfig = {}): Tool
           const processed = await processImageValues(resolvedValues);
           const promptText = buildPromptText(params.strings, processed);
           const historyToUse = messagesHistory || params.history;
-          const { result, messages } = await runToolLoop<T>(
+          const {
+            result,
+            messages: providerMessages,
+            usage: callUsage,
+          } = await runToolLoop<T>(
             promptText,
             allTools,
             resolvedConfig,
@@ -411,14 +418,23 @@ export function createTooledPrompt(initialConfig: TooledPromptConfig = {}): Tool
             systemImages,
             historyToUse,
           );
-          return { data: result, next: buildNext(messages, allTools) };
+          const promptUsage = buildPromptUsage(callUsage, params.prevCumulativeUsage);
+          return {
+            data: result,
+            usage: promptUsage,
+            next: buildNext(providerMessages, allTools, promptUsage?.cumulative),
+          };
         }
 
         const allTools = [...baseTools, ...configTools];
         const processedValues = await processImageValues(params.values);
         const promptText = buildPromptText(params.strings, processedValues);
         const historyToUse = messagesHistory || params.history;
-        const { result, messages } = await runToolLoop(
+        const {
+          result,
+          messages: providerMessages,
+          usage: callUsage,
+        } = await runToolLoop(
           promptText,
           allTools,
           resolvedConfig,
@@ -429,7 +445,12 @@ export function createTooledPrompt(initialConfig: TooledPromptConfig = {}): Tool
           systemImages,
           historyToUse,
         );
-        return { data: result, next: buildNext(messages, allTools) };
+        const promptUsage = buildPromptUsage(callUsage, params.prevCumulativeUsage);
+        return {
+          data: result,
+          usage: promptUsage,
+          next: buildNext(providerMessages, allTools, promptUsage?.cumulative),
+        };
       } finally {
         activePerCallConfig = {};
       }
@@ -438,10 +459,28 @@ export function createTooledPrompt(initialConfig: TooledPromptConfig = {}): Tool
     return execute as PromptExecutor;
   }
 
+  function buildPromptUsage(callUsage: Usage | undefined, prevCumulative: Usage | undefined): PromptUsage | undefined {
+    if (!callUsage) return undefined;
+    return {
+      call: callUsage,
+      cumulative: prevCumulative
+        ? {
+            promptTokens: prevCumulative.promptTokens + callUsage.promptTokens,
+            completionTokens: prevCumulative.completionTokens + callUsage.completionTokens,
+            totalTokens: prevCumulative.totalTokens + callUsage.totalTokens,
+          }
+        : { ...callUsage },
+    };
+  }
+
   /**
    * Build a `next` tagged template from conversation history and previous tools.
    */
-  function buildNext(prevMessages: unknown[], prevTools: ToolFunction[]): PromptTaggedTemplate {
+  function buildNext(
+    prevProviderMessages: unknown[],
+    prevTools: ToolFunction[],
+    prevCumulativeUsage?: Usage,
+  ): PromptTaggedTemplate {
     function next(strings: TemplateStringsArray, ...values: unknown[]): PromptExecutor {
       const { tools: newTools, returnIndices, messagesIndex } = extractTemplateTools(strings, values);
       const mergedTools = deduplicateTools(prevTools, newTools);
@@ -452,8 +491,9 @@ export function createTooledPrompt(initialConfig: TooledPromptConfig = {}): Tool
         tools: mergedTools,
         returnIndices,
         messagesIndex,
-        history: prevMessages,
+        history: prevProviderMessages,
         includeSystemPrompt: true,
+        prevCumulativeUsage,
       });
     }
 

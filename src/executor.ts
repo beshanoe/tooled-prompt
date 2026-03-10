@@ -19,7 +19,7 @@ import type { TooledPromptEmitter } from './events.js';
 import type { Store } from './store.js';
 import { isImageMarker } from './image.js';
 import { getProvider } from './providers/index.js';
-import type { ToolResultInfo } from './providers/types.js';
+import type { ToolResultInfo, Usage } from './providers/types.js';
 import { TOOLBOX_SYMBOL, type ToolboxFunction } from './toolbox.js';
 
 // Re-export parseSSEStream for backward compatibility
@@ -167,7 +167,7 @@ export async function runToolLoop<T = string>(
   systemPrompt?: PromptContent,
   systemImages?: ContentPart[],
   history?: unknown[],
-): Promise<{ result: T; messages: unknown[] }> {
+): Promise<{ result: T; messages: unknown[]; usage?: Usage }> {
   emitter.emit('start');
   const provider = getProvider(config.provider);
   const toolMeta: ToolMetadata[] = tools.map((t) => t[TOOL_SYMBOL]);
@@ -179,6 +179,7 @@ export async function runToolLoop<T = string>(
   const { apiUrl, modelName, apiKey, maxIterations, stream: useStreaming, timeout } = config;
 
   let iterations = 0;
+  let usage: Usage | undefined;
 
   while (maxIterations === undefined || iterations < maxIterations) {
     const { url, headers, body } = provider.buildRequest({
@@ -220,7 +221,16 @@ export async function runToolLoop<T = string>(
       throw new Error(`LLM request failed (${response.status}): ${text}`);
     }
 
-    const { content, toolCalls: rawToolCalls } = await provider.parseResponse(response, useStreaming, emitter);
+    const parsed = await provider.parseResponse(response, useStreaming, emitter);
+    const { content, toolCalls: rawToolCalls } = parsed;
+
+    if (parsed.usage) {
+      usage = {
+        promptTokens: (usage?.promptTokens ?? 0) + parsed.usage.promptTokens,
+        completionTokens: (usage?.completionTokens ?? 0) + parsed.usage.completionTokens,
+        totalTokens: (usage?.totalTokens ?? 0) + parsed.usage.totalTokens,
+      };
+    }
 
     // Filter out incomplete tool calls
     const toolCalls = rawToolCalls.filter((tc) => tc.id && tc.name);
@@ -232,24 +242,24 @@ export async function runToolLoop<T = string>(
 
       // If we have a schema, parse and validate the response
       if (schema) {
-        let parsed: unknown;
+        let parsedContent: unknown;
         try {
-          parsed = JSON.parse(content);
+          parsedContent = JSON.parse(content);
         } catch (err) {
           throw new Error(`Failed to parse JSON response: ${(err as Error).message}\n\nRaw content:\n${content}`);
         }
 
         try {
-          return { result: schema.parse(parsed) as T, messages };
+          return { result: schema.parse(parsedContent) as T, messages, usage };
         } catch (err) {
           throw new Error(
-            `Schema validation failed: ${(err as Error).message}\n\nParsed JSON:\n${JSON.stringify(parsed, null, 2)}`,
+            `Schema validation failed: ${(err as Error).message}\n\nParsed JSON:\n${JSON.stringify(parsedContent, null, 2)}`,
           );
         }
       }
 
       // No schema - return the content as string
-      return { result: content as T, messages };
+      return { result: content as T, messages, usage };
     }
 
     // Execute tool calls and collect results
@@ -354,7 +364,7 @@ export async function runToolLoop<T = string>(
     // Check if the return store has been filled — early exit
     if (returnStore) {
       const val = returnStore.get();
-      if (val !== undefined) return { result: val, messages };
+      if (val !== undefined) return { result: val, messages, usage };
     }
 
     iterations++;

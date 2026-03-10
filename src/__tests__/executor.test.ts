@@ -705,4 +705,69 @@ describe('runToolLoop', () => {
       expect(result).toBe('Done');
     });
   });
+
+  describe('usage tracking', () => {
+    function mockLLMResponseWithUsage(
+      content: string,
+      usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number },
+      toolCalls?: Array<{ id: string; function: { name: string; arguments: string } }>,
+    ) {
+      return {
+        ok: true,
+        json: async () => ({
+          choices: [
+            {
+              message: {
+                content,
+                tool_calls: toolCalls?.map((tc) => ({ id: tc.id, type: 'function', function: tc.function })),
+              },
+            },
+          ],
+          usage,
+        }),
+      };
+    }
+
+    it('returns usage from a simple response', async () => {
+      const nonStreamConfig = { ...defaultConfig, stream: false };
+      mockFetch.mockResolvedValue(
+        mockLLMResponseWithUsage('Hello!', { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 }),
+      );
+
+      const { result, usage } = await runToolLoop('Say hello', [], nonStreamConfig, emitter);
+
+      expect(result).toBe('Hello!');
+      expect(usage).toEqual({ promptTokens: 10, completionTokens: 5, totalTokens: 15 });
+    });
+
+    it('accumulates usage across tool-loop iterations', async () => {
+      const nonStreamConfig = { ...defaultConfig, stream: false };
+      const myTool = tool(function greet(name: string) {
+        return `Hello, ${name}!`;
+      });
+
+      // First response: tool call with usage
+      mockFetch.mockResolvedValueOnce(
+        mockLLMResponseWithUsage('', { prompt_tokens: 20, completion_tokens: 10, total_tokens: 30 }, [
+          { id: 'call1', function: { name: 'greet', arguments: '{"name":"World"}' } },
+        ]),
+      );
+      // Second response: final answer with usage
+      mockFetch.mockResolvedValueOnce(
+        mockLLMResponseWithUsage('Done', { prompt_tokens: 40, completion_tokens: 5, total_tokens: 45 }),
+      );
+
+      const { usage } = await runToolLoop('Greet someone', [myTool], nonStreamConfig, emitter);
+
+      expect(usage).toEqual({ promptTokens: 60, completionTokens: 15, totalTokens: 75 });
+    });
+
+    it('returns undefined usage when provider does not include it', async () => {
+      mockFetch.mockResolvedValue(mockLLMResponse('Hello!'));
+
+      const { usage } = await runToolLoop('Say hello', [], defaultConfig, emitter);
+
+      expect(usage).toBeUndefined();
+    });
+  });
 });
