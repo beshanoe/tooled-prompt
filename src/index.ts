@@ -46,6 +46,9 @@ export { MESSAGES_SYMBOL, createMessagesSentinel, type HistoryMessage, type Mess
 // Deferred tool loading
 export { toolSearch, TOOLBOX_SYMBOL, type ToolSearchMatcher, type ToolSearchOptions } from './toolbox.js';
 
+// Code-action meta-tool
+export { toolEval, type ToolEvalOptions } from './tool-eval.js';
+
 // Types
 export type {
   ToolFunction,
