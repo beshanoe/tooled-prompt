@@ -28,6 +28,7 @@ Runtime LLM prompt library with smart tool recognition for TypeScript.
   - [Multi-Turn Conversations](#multi-turn-conversations)
   - [Injecting Conversation History](#injecting-conversation-history)
   - [Deferred Tool Loading](#deferred-tool-loading)
+  - [Code-Action Tool (`toolEval`)](#code-action-tool-tooleval)
   - [Usage Tracking](#usage-tracking)
 - [API Reference](#api-reference)
 - [License](#license)
@@ -78,6 +79,7 @@ console.log(data);
 - **Structured Output** — Get typed responses with Zod schema validation
 - **Store Pattern** — Capture structured output via tool calls with `store()` and `prompt.return`
 - **Deferred Tool Loading** — Use `toolSearch()` so the LLM discovers tools on demand instead of sending all schemas upfront
+- **Code-Action Tool** — Use `toolEval()` so the LLM writes JavaScript to orchestrate multiple tools in a single turn
 - **Usage Tracking** — Per-call and cumulative token usage across conversation chains
 - **Image Support** — Pass images (Buffer/Uint8Array) directly in templates
 - **Streaming Events** — Subscribe to content, thinking, and tool events
@@ -446,6 +448,23 @@ const { data } = await prompt`
 
 The LLM sees only `tool_search(query)` initially. When it calls `tool_search("file")`, matching tools like `read_file` and `write_file` are activated and appear as native tools in subsequent requests. This keeps the initial context small while still giving the LLM access to all tools.
 
+### Code-Action Tool (`toolEval`)
+
+Instead of one LLM round-trip per tool call, `toolEval()` lets the LLM write a JavaScript function body that orchestrates multiple tools in a single turn:
+
+```typescript
+import { prompt, toolEval } from 'tooled-prompt';
+
+const exec = toolEval(add, multiply, readFile, sendEmail);
+
+const { data } = await prompt`
+  Read example.txt, multiply 123 by 456, and email the result.
+  ${exec}
+`();
+```
+
+The LLM sees a single `tool_eval(code)` tool with JSDoc signatures for all registered functions. When called, the code runs via `AsyncFunction` with those functions in scope. Accepts raw functions or `tool()`-wrapped functions
+
 ### Usage Tracking
 
 Every `PromptResult` includes token usage with per-call and cumulative breakdowns:
@@ -569,6 +588,21 @@ import { toolSearch } from 'tooled-prompt';
 const search = toolSearch(readFile, writeFile, sendEmail);
 // Use in template: ${search}
 // LLM calls tool_search("file") → read_file and write_file become available
+```
+
+### `toolEval`
+
+Create a code-action meta-tool that lets the LLM write JavaScript to orchestrate multiple tools in a single turn.
+
+```typescript
+import { toolEval } from 'tooled-prompt';
+
+const exec = toolEval(fn1, fn2, fn3);
+// Use in template: ${exec}
+// LLM calls tool_eval(code) → code is executed with fn1, fn2, fn3 in scope
+
+// With options:
+const exec = toolEval(fn1, fn2, { timeout: 10000 });
 ```
 
 ### `store`
