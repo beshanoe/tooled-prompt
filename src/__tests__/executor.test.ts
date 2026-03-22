@@ -460,6 +460,50 @@ describe('runToolLoop', () => {
     expect(toolMessage.content).toBe('{"name":"John","age":30}');
   });
 
+  it('applies parseReturn to tool results when Zod returns schema is set', async () => {
+    function getUser(id: string): { name: string; id: number } {
+      return { name: 'Alice', id: Number(id) };
+    }
+    const userTool = tool(getUser, {
+      args: [['id', 'User ID']],
+      returns: z.object({ name: z.string(), id: z.number() }),
+    });
+
+    mockFetch.mockResolvedValueOnce(
+      mockLLMResponse('', [{ id: 'call1', function: { name: 'get_user', arguments: '{"id":"1"}' } }]),
+    );
+    mockFetch.mockResolvedValueOnce(mockLLMResponse('Got user'));
+
+    await runToolLoop('Get user', [userTool], defaultConfig, emitter);
+
+    // The parsed object should be re-serialized as JSON in the tool result
+    const secondCall = mockFetch.mock.calls[1];
+    const body = JSON.parse(secondCall[1].body);
+    const toolMessage = body.messages.find((m: any) => m.role === 'tool');
+    expect(toolMessage.content).toBe('{"name":"Alice","id":1}');
+  });
+
+  it('surfaces parseReturn validation errors to LLM', async () => {
+    function badTool(): { wrong: string } {
+      return { wrong: 'shape' };
+    }
+    const wrapped = tool(badTool as any, {
+      returns: z.object({ name: z.string() }) as any,
+    });
+
+    mockFetch.mockResolvedValueOnce(
+      mockLLMResponse('', [{ id: 'call1', function: { name: 'bad_tool', arguments: '{}' } }]),
+    );
+    mockFetch.mockResolvedValueOnce(mockLLMResponse('Error noted'));
+
+    await runToolLoop('Test', [wrapped], defaultConfig, emitter);
+
+    const secondCall = mockFetch.mock.calls[1];
+    const body = JSON.parse(secondCall[1].body);
+    const toolMessage = body.messages.find((m: any) => m.role === 'tool');
+    expect(toolMessage.content).toContain('error');
+  });
+
   it('passes arguments in correct parameter order', async () => {
     const ordered = vi.fn((first: string, second: string, third: string) => {
       return `${first}-${second}-${third}`;

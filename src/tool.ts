@@ -29,6 +29,32 @@ export { TOOL_SYMBOL, type ToolMetadata, type ToolFunction };
 let anonymousCounter = 0;
 
 /**
+ * Convert a JSON Schema to a compact TS-like type string.
+ * e.g. { type: "object", properties: { name: { type: "string" }, id: { type: "number" } } }
+ *   → "{ name: string, id: number }"
+ */
+export function jsonSchemaToTypeString(schema: Record<string, unknown>): string {
+  const type = schema.type as string | undefined;
+  if (type === 'string') return 'string';
+  if (type === 'number' || type === 'integer') return 'number';
+  if (type === 'boolean') return 'boolean';
+  if (type === 'null') return 'null';
+  if (type === 'array') {
+    const items = schema.items as Record<string, unknown> | undefined;
+    return items ? `${jsonSchemaToTypeString(items)}[]` : 'unknown[]';
+  }
+  if (type === 'object' && schema.properties) {
+    const props = schema.properties as Record<string, Record<string, unknown>>;
+    const req = new Set((schema.required as string[]) || []);
+    const fields = Object.entries(props)
+      .map(([k, v]) => `${k}${req.has(k) ? '' : '?'}: ${jsonSchemaToTypeString(v)}`)
+      .join(', ');
+    return `{ ${fields} }`;
+  }
+  return 'object';
+}
+
+/**
  * Convert camelCase/PascalCase to snake_case.
  * Already-snake_case names pass through unchanged.
  */
@@ -130,7 +156,7 @@ export function tool<T extends (...args: any[]) => any>(
   fnOrNamed: T | NamedFunction,
   options?: ToolOptions<T>,
 ): ToolFunction<T> {
-  const { description, args } = options || {};
+  const { description, args, returns } = options || {};
   // Check if it's object syntax: { myFunc }
   if (typeof fnOrNamed === 'object' && fnOrNamed !== null && !isZodSchema(fnOrNamed)) {
     const entries = Object.entries(fnOrNamed);
@@ -142,11 +168,11 @@ export function tool<T extends (...args: any[]) => any>(
       throw new Error('tool() object value must be a function');
     }
     // Proceed with extracted name and function
-    return toolImpl(fn as T, name, description, args);
+    return toolImpl(fn as T, name, description, args, returns as string | ZodType | undefined);
   }
 
   // Original path: direct function
-  return toolImpl(fnOrNamed as T, undefined, description, args);
+  return toolImpl(fnOrNamed as T, undefined, description, args, returns as string | ZodType | undefined);
 }
 
 /**
@@ -157,6 +183,7 @@ function toolImpl<T extends (...args: any[]) => any>(
   explicitName: string | undefined,
   description?: string,
   schema?: ArgsForFn<T>,
+  returns?: string | ZodType,
 ): ToolFunction<T> {
   // If already a tool, return as-is
   if (isTool(fn)) {
@@ -212,10 +239,30 @@ function toolImpl<T extends (...args: any[]) => any>(
     parameters = inferSchema(parsed);
   }
 
+  // Resolve returns: description, JSON schema, and optional runtime parser
+  let resolvedReturns: string | undefined;
+  let returnsSchema: Record<string, unknown> | undefined;
+  let parseReturn: ((raw: unknown) => unknown) | undefined;
+  if (returns != null) {
+    if (typeof returns === 'string') {
+      resolvedReturns = returns;
+    } else {
+      const z = requireZod();
+      returnsSchema = z.toJSONSchema(returns) as Record<string, unknown>;
+      const meta = z.globalRegistry.get(returns);
+      resolvedReturns = (meta as any)?.description as string | undefined;
+      const zodReturns = returns;
+      parseReturn = (raw: unknown) => zodReturns.parse(raw);
+    }
+  }
+
   const metadata: ToolMetadata = {
     name,
     description: description || `The ${name} function`,
     parameters,
+    returns: resolvedReturns,
+    returnsSchema,
+    parseReturn,
   };
 
   // Attach metadata to the function

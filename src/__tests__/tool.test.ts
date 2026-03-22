@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { tool, isTool, getToolMetadata, resetAnonymousCounter, TOOL_SYMBOL } from '../tool.js';
+import { tool, isTool, getToolMetadata, resetAnonymousCounter, TOOL_SYMBOL, jsonSchemaToTypeString } from '../tool.js';
 import { z } from 'zod';
 
 describe('tool', () => {
@@ -342,6 +342,140 @@ describe('wrapped function execution', () => {
 
     expect(wrapped(3, 4)).toBe(12);
     expect(wrapped(0, 100)).toBe(0);
+  });
+});
+
+describe('returns option', () => {
+  it('stores string returns in metadata', () => {
+    function add(a: string, b: string) {
+      return String(Number(a) + Number(b));
+    }
+    const wrapped = tool(add, { returns: 'The sum as a string' });
+    const meta = getToolMetadata(wrapped);
+    expect(meta.returns).toBe('The sum as a string');
+  });
+
+  it('does not append returns to description', () => {
+    function add(a: string, b: string) {
+      return String(Number(a) + Number(b));
+    }
+    const wrapped = tool(add, { description: 'Add two numbers', returns: 'The sum as a string' });
+    const meta = getToolMetadata(wrapped);
+    expect(meta.description).toBe('Add two numbers');
+  });
+
+  it('resolves Zod string schema to type and description', () => {
+    function greet(name: string) {
+      return `Hello, ${name}`;
+    }
+    const wrapped = tool(greet, { returns: z.string().describe('A greeting message') });
+    const meta = getToolMetadata(wrapped);
+    expect(meta.returns).toBe('A greeting message');
+    expect(jsonSchemaToTypeString(meta.returnsSchema!)).toBe('string');
+  });
+
+  it('resolves Zod object schema to type shape', () => {
+    function getUser(id: string): { name: string; id: number } {
+      return { name: 'Alice', id: Number(id) };
+    }
+    const wrapped = tool(getUser, {
+      returns: z.object({ name: z.string(), id: z.number() }),
+    });
+    const meta = getToolMetadata(wrapped);
+    expect(jsonSchemaToTypeString(meta.returnsSchema!)).toBe('{ name: string, id: number }');
+    expect(meta.returns).toBeUndefined();
+  });
+
+  it('resolves Zod object schema with description', () => {
+    function fetchUser(id: string): { name: string; id: number } {
+      return { name: 'Alice', id: Number(id) };
+    }
+    const wrapped = tool(fetchUser, {
+      returns: z.object({ name: z.string(), id: z.number() }).describe('A user record'),
+    });
+    const meta = getToolMetadata(wrapped);
+    expect(jsonSchemaToTypeString(meta.returnsSchema!)).toBe('{ name: string, id: number }');
+    expect(meta.returns).toBe('A user record');
+  });
+
+  it('marks optional fields with ? in object type string', () => {
+    function getProfile(_id: string): { name: string; bio?: string; age?: number } {
+      return { name: 'Alice' };
+    }
+    const wrapped = tool(getProfile, {
+      returns: z.object({ name: z.string(), bio: z.string().optional(), age: z.number().optional() }),
+    });
+    const meta = getToolMetadata(wrapped);
+    expect(jsonSchemaToTypeString(meta.returnsSchema!)).toBe('{ name: string, bio?: string, age?: number }');
+  });
+
+  it('resolves Zod array schema', () => {
+    function listNames(): string[] {
+      return ['a', 'b'];
+    }
+    const wrapped = tool(listNames, { returns: z.array(z.string()) });
+    const meta = getToolMetadata(wrapped);
+    expect(jsonSchemaToTypeString(meta.returnsSchema!)).toBe('string[]');
+  });
+
+  it('metadata.returns is undefined when not provided', () => {
+    function add(a: string) {
+      return a;
+    }
+    const wrapped = tool(add);
+    const meta = getToolMetadata(wrapped);
+    expect(meta.returns).toBeUndefined();
+    expect(meta.parseReturn).toBeUndefined();
+  });
+
+  it('sets parseReturn for Zod schema', () => {
+    function getUser(id: string): { name: string; id: number } {
+      return { name: 'Alice', id: Number(id) };
+    }
+    const wrapped = tool(getUser, {
+      returns: z.object({ name: z.string(), id: z.number() }),
+    });
+    const meta = getToolMetadata(wrapped);
+    expect(meta.parseReturn).toBeTypeOf('function');
+  });
+
+  it('parseReturn validates object return', () => {
+    function getUser(id: string): { name: string; id: number } {
+      return { name: 'Alice', id: Number(id) };
+    }
+    const wrapped = tool(getUser, {
+      returns: z.object({ name: z.string(), id: z.number() }),
+    });
+    const result = wrapped('1');
+    const parsed = getToolMetadata(wrapped).parseReturn!(result);
+    expect(parsed).toEqual({ name: 'Alice', id: 1 });
+  });
+
+  it('parseReturn passes through matching types', () => {
+    function greet(name: string): string {
+      return `Hello, ${name}`;
+    }
+    const wrapped = tool(greet, { returns: z.string() });
+    const parsed = getToolMetadata(wrapped).parseReturn!(wrapped('Alice'));
+    expect(parsed).toBe('Hello, Alice');
+  });
+
+  it('parseReturn throws on invalid data', () => {
+    function bad(): { wrong: string } {
+      return { wrong: 'shape' };
+    }
+    const wrapped = tool(bad as any, {
+      returns: z.object({ name: z.string() }) as any,
+    });
+    expect(() => getToolMetadata(wrapped).parseReturn!(wrapped())).toThrow();
+  });
+
+  it('does not set parseReturn for string returns', () => {
+    function add(a: string) {
+      return a;
+    }
+    const wrapped = tool(add, { returns: 'a string result' });
+    expect(getToolMetadata(wrapped).parseReturn).toBeUndefined();
   });
 });
 

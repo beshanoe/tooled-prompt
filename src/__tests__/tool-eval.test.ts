@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { z } from 'zod';
 import { toolEval } from '../tool-eval.js';
 import { tool } from '../tool.js';
 import { TOOL_SYMBOL } from '../types.js';
@@ -60,6 +61,76 @@ describe('toolEval', () => {
     const exec = toolEval(wrapped);
     const desc = exec[TOOL_SYMBOL].description;
     expect(desc).toContain('Add two numbers');
+  });
+
+  it('description includes @returns with string returns', () => {
+    function sum(a: string, b: string) {
+      return String(Number(a) + Number(b));
+    }
+    const wrapped = tool(sum, {
+      description: 'Add two numbers',
+      args: [
+        ['a', 'First number'],
+        ['b', 'Second number'],
+      ],
+      returns: 'The sum as a string',
+    });
+    const exec = toolEval(wrapped);
+    const desc = exec[TOOL_SYMBOL].description;
+    expect(desc).toContain('@returns The sum as a string');
+  });
+
+  it('description includes @returns {type} with Zod returns', () => {
+    function findUser(id: string): { name: string; id: number } {
+      return { name: 'Alice', id: Number(id) };
+    }
+    const wrapped = tool(findUser, {
+      returns: z.object({ name: z.string(), id: z.number() }).describe('A user record'),
+    });
+    const exec = toolEval(wrapped);
+    const desc = exec[TOOL_SYMBOL].description;
+    expect(desc).toContain('@returns {{ name: string, id: number }} A user record');
+  });
+
+  it('params include {type} and optionality', () => {
+    function search(query: string, limit = 10) {
+      return `${query}:${limit}`;
+    }
+    const wrapped = tool(search, {
+      args: [
+        ['query', 'Search query'],
+        ['limit', 'Max results'],
+      ],
+    });
+    const exec = toolEval(wrapped);
+    const desc = exec[TOOL_SYMBOL].description;
+    expect(desc).toContain('@param {string} query - Search query');
+    expect(desc).toContain('@param {string} [limit] - Max results');
+  });
+
+  it('auto-parses return values when tool has Zod returns schema', async () => {
+    function lookupUser(id: string): { name: string; id: number } {
+      return { name: 'Alice', id: Number(id) };
+    }
+    tool(lookupUser, {
+      returns: z.object({ name: z.string(), id: z.number() }),
+    });
+    const exec = toolEval(lookupUser);
+    // The eval code accesses .name directly — parseReturn validates
+    const result = await exec('const user = await lookupUser("1"); return user.name;');
+    expect(result).toBe('Alice');
+  });
+
+  it('auto-parses async tool return values', async () => {
+    async function fetchItems(category: string): Promise<Array<{ name: string }>> {
+      return [{ name: category }];
+    }
+    tool(fetchItems, {
+      returns: z.array(z.object({ name: z.string() })),
+    });
+    const exec = toolEval(fetchItems);
+    const result = await exec('const items = await fetchItems("books"); return items[0].name;');
+    expect(result).toBe('books');
   });
 
   it('trailing options not treated as a tool', () => {
