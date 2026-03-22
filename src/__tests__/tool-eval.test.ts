@@ -196,16 +196,65 @@ describe('toolEval', () => {
     expect(result).toBe('Error: boom');
   });
 
-  it('returns error message on syntax error', async () => {
+  it('returns annotated error on syntax error', async () => {
     const exec = toolEval(add);
-    const result = await exec('const x = {{{');
-    expect(result).toContain('Error:');
+    const result = await exec('const x = 1;\nconst y = ;\nreturn x');
+    expect(result).toContain('SyntaxError:');
+    expect(result).toContain('> 2 |');
+    expect(result).toContain('^');
   });
 
   it('times out when code hangs', async () => {
     const exec = toolEval(add, { timeout: 50 });
     const result = await exec('await new Promise(r => setTimeout(r, 5000)); return "late"');
     expect(result).toContain('Timed out');
+  });
+
+  describe('auto-return preprocessing', () => {
+    it('auto-returns a bare expression', async () => {
+      const exec = toolEval(add);
+      const result = await exec('add("2", "3")');
+      expect(result).toBe('5');
+    });
+
+    it('auto-returns a bare await expression', async () => {
+      async function asyncAdd(a: string, b: string) {
+        return String(Number(a) + Number(b));
+      }
+      const exec = toolEval(asyncAdd);
+      const result = await exec('await asyncAdd("10", "20")');
+      expect(result).toBe('30');
+    });
+
+    it('auto-calls a single uncalled function', async () => {
+      const exec = toolEval(add);
+      const result = await exec('async function main() {\n  return add("2", "3");\n}');
+      expect(result).toBe('5');
+    });
+
+    it('auto-calls the uncalled function when helpers are called', async () => {
+      const exec = toolEval(add, multiply);
+      const result = await exec(`
+        function helper(x) { return multiply(x, "2"); }
+        async function main() {
+          const sum = add("3", "4");
+          return helper(sum);
+        }
+      `);
+      expect(result).toBe('14');
+    });
+
+    it('does not guess when multiple functions are uncalled', async () => {
+      const exec = toolEval(add);
+      const result = await exec('function a() { return add("1","2"); }\nfunction b() { return add("3","4"); }');
+      expect(result).toBe('OK');
+    });
+
+    it('still works with explicit return (regression)', async () => {
+      const exec = toolEval(add);
+      const result = await exec('return add("2", "3")');
+      expect(result).toBe('5');
+    });
   });
 
   describe('integration with runToolLoop', () => {
