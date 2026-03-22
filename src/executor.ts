@@ -304,7 +304,11 @@ export async function runToolLoop<T = string>(
         const paramNames = Object.keys(toolFn[TOOL_SYMBOL].parameters.properties || {});
         const args = paramNames.map((name) => input[name]);
         const rawResult = await toolFn(...args);
-        const result = await resolveIterableResult(rawResult);
+        let result = await resolveIterableResult(rawResult);
+        const { parseReturn } = toolFn[TOOL_SYMBOL];
+        if (parseReturn) {
+          result = parseReturn(result);
+        }
 
         // Handle void/undefined results
         let resultStr: string;

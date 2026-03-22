@@ -6,7 +6,7 @@
  * multiple tools in a single turn. The runtime executes it via AsyncFunction.
  */
 
-import { tool } from './tool.js';
+import { tool, jsonSchemaToTypeString } from './tool.js';
 import { TOOL_SYMBOL, type ToolFunction } from './types.js';
 
 /**
@@ -27,12 +27,21 @@ const AsyncFunction: new (...args: string[]) => (...args: any[]) => Promise<any>
 function buildSignature(fn: (...args: any[]) => any, meta: ToolFunction[typeof TOOL_SYMBOL]): string {
   const params = Object.entries(meta.parameters.properties || {});
 
+  const required = new Set(meta.parameters.required || []);
+
   const lines: string[] = [];
   lines.push('/**');
   lines.push(` * ${meta.description}`);
   for (const [name, prop] of params) {
+    const typeStr = jsonSchemaToTypeString(prop as Record<string, unknown>);
     const desc = (prop as any).description || '';
-    lines.push(` * @param ${name}${desc ? ` - ${desc}` : ''}`);
+    const paramName = required.has(name) ? name : `[${name}]`;
+    lines.push(` * @param {${typeStr}} ${paramName}${desc ? ` - ${desc}` : ''}`);
+  }
+  if (meta.returnsSchema || meta.returns) {
+    const type = meta.returnsSchema ? `{${jsonSchemaToTypeString(meta.returnsSchema)}} ` : '';
+    const desc = meta.returns || '';
+    lines.push(` * @returns ${type}${desc}`.trimEnd());
   }
   lines.push(' */');
 
@@ -102,12 +111,22 @@ export function toolEval(
   // Use original fn.name for the eval scope (camelCase, natural JS)
   const fnNames = fns.map((fn, i) => fn.name || tools[i][TOOL_SYMBOL].name);
 
+  // Wrap functions that have parseReturn to auto-parse their return values
+  const scopeFns = fns.map((fn, i) => {
+    const { parseReturn } = tools[i][TOOL_SYMBOL];
+    if (!parseReturn) return fn;
+    const parse = parseReturn;
+    return async function (this: unknown, ...args: any[]) {
+      return parse(await fn.apply(this, args));
+    };
+  });
+
   async function tool_eval(code: string): Promise<string> {
     try {
       const fn = new AsyncFunction(...fnNames, code);
       let timer: ReturnType<typeof setTimeout>;
       const result = await Promise.race([
-        fn(...fns),
+        fn(...scopeFns),
         new Promise((_, reject) => {
           timer = setTimeout(() => reject(new Error(`Timed out after ${timeoutMs}ms`)), timeoutMs);
         }),

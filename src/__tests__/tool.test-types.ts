@@ -124,6 +124,32 @@ tool(withDefault, {
 tool(withDefault, { args: [z.string(), z.string()] }); // ✓ - provide both zod
 tool(withDefault, { args: ['Name', z.string()] }); // ✓ - mixed
 
+// === returns option ===
+tool(oneArg, { returns: 'A greeting string' }); // ✓ string description always ok
+tool(oneArg, { returns: z.string() }); // ✓ fn returns string, schema is string
+tool(noArgs, { returns: 'something' }); // ✓ string returns works with no args
+
+// returns type checking: Zod output must match Awaited<ReturnType<T>>
+function returnsObj(): { name: string; id: number } {
+  return { name: 'a', id: 1 };
+}
+tool(returnsObj, { returns: z.object({ name: z.string(), id: z.number() }) }); // ✓ exact match
+
+function returnsArr(): string[] {
+  return ['a'];
+}
+tool(returnsArr, { returns: z.array(z.string()) }); // ✓ array match
+
+async function asyncReturnsObj(): Promise<{ name: string }> {
+  return { name: 'a' };
+}
+tool(asyncReturnsObj, { returns: z.object({ name: z.string() }) }); // ✓ unwraps Promise
+
+// @ts-expect-error - string return ≠ object schema
+tool(oneArg, { returns: z.object({ name: z.string() }) });
+// @ts-expect-error - object return ≠ string schema
+tool(returnsObj, { returns: z.string() });
+
 // === z.object element for fn that takes an object param ===
 function takesObject(data: { name: string; age: number }) {
   return data.name;

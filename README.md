@@ -281,6 +281,18 @@ tool(createUser, {
 });
 ```
 
+**Return types** for better tool chaining (especially with `toolEval`):
+
+```typescript
+// String description
+tool(add, { returns: 'The numeric sum as a string' });
+
+// Zod schema — auto-parses the return value at runtime
+tool(searchUsers, {
+  returns: z.array(z.object({ name: z.string(), email: z.string() })),
+});
+```
+
 ### Config Tools
 
 Register tools via config so they're available to every prompt without embedding in the template:
@@ -463,7 +475,9 @@ const { data } = await prompt`
 `();
 ```
 
-The LLM sees a single `tool_eval(code)` tool with JSDoc signatures for all registered functions. When called, the code runs via `AsyncFunction` with those functions in scope. Accepts raw functions or `tool()`-wrapped functions
+The LLM sees a single `tool_eval(code)` tool with JSDoc signatures for all registered functions. When called, the code runs via `AsyncFunction` with those functions in scope. Accepts raw functions or `tool()`-wrapped functions.
+
+Tools with a Zod `returns` schema have their return values auto-parsed, so the LLM's generated code gets real objects — no `JSON.parse` needed.
 
 ### Usage Tracking
 
@@ -576,6 +590,10 @@ tool(myFunc, { description: '...', args: ['arg1 desc', 'arg2 desc'] });
 
 // Arrow function via object syntax
 tool({ myFunc }, { description: '...', args: ['arg1 desc'] });
+
+// With return type (string or Zod schema)
+tool(myFunc, { returns: 'A greeting string' });
+tool(myFunc, { returns: z.object({ id: z.number() }) }); // auto-parses at runtime
 ```
 
 ### `toolSearch`

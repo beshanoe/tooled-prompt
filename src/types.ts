@@ -76,6 +76,8 @@ export type ArgsForFn<T extends (...args: any[]) => any> = Parameters<T>['length
 export interface ToolOptions<T extends (...args: any[]) => any = (...args: any[]) => any> {
   description?: string;
   args?: ArgsForFn<T>;
+  /** Return type description: plain string or Zod schema (type-checked against function return type) */
+  returns?: string | { _zod: { output: Awaited<ReturnType<T>> } };
 }
 
 /**
@@ -85,6 +87,12 @@ export interface ToolMetadata {
   name: string;
   description: string;
   parameters: JsonSchema;
+  /** Resolved return type description (if provided via ToolOptions.returns) */
+  returns?: string;
+  /** JSON Schema for the return type (set when returns is a Zod schema) */
+  returnsSchema?: Record<string, unknown>;
+  /** Runtime parser for return values (set when returns is a Zod schema) */
+  parseReturn?: (raw: unknown) => unknown;
 }
 
 /**
