@@ -8,6 +8,36 @@
 
 import { tool, jsonSchemaToTypeString } from './tool.js';
 import { TOOL_SYMBOL, type ToolFunction } from './types.js';
+import { preprocessCode } from './preprocess-code.js';
+
+/**
+ * Format a code error with line-annotated source context.
+ * Acorn SyntaxErrors include a `loc` property with line/column.
+ */
+function formatCodeError(err: Error, code: string): string {
+  const loc = (err as any).loc as { line: number; column: number } | undefined;
+  if (!loc) return `Error: ${err.message}`;
+
+  const lines = code.split('\n');
+  const lineIdx = loc.line - 1;
+  const start = Math.max(0, lineIdx - 1);
+  const end = Math.min(lines.length, lineIdx + 2);
+
+  const context = lines.slice(start, end).map((line, i) => {
+    const lineNum = start + i + 1;
+    const marker = lineNum === loc.line ? '>' : ' ';
+    return `${marker} ${lineNum} | ${line}`;
+  });
+
+  // Add caret pointing to the column
+  if (lineIdx >= start && lineIdx < end) {
+    const caretIdx = context.findIndex((_, i) => start + i === lineIdx);
+    const padding = `  ${loc.line} | `.length + loc.column;
+    context.splice(caretIdx + 1, 0, ' '.repeat(padding) + '^');
+  }
+
+  return `SyntaxError: ${err.message}\n${context.join('\n')}`;
+}
 
 /**
  * Options for toolEval
@@ -59,7 +89,7 @@ function buildDescription(fns: ((...args: any[]) => any)[], tools: ToolFunction[
   const signatures = fns.map((fn, i) => buildSignature(fn, tools[i][TOOL_SYMBOL])).join('\n\n');
 
   return `${preamble}
-Write the body of an async function (no wrapper needed). Available functions:
+Write the body of an async function. Available functions:
 
 ${signatures}
 
@@ -123,7 +153,8 @@ export function toolEval(
 
   async function tool_eval(code: string): Promise<string> {
     try {
-      const fn = new AsyncFunction(...fnNames, code);
+      const processedCode = preprocessCode(code);
+      const fn = new AsyncFunction(...fnNames, processedCode);
       let timer: ReturnType<typeof setTimeout>;
       const result = await Promise.race([
         fn(...scopeFns),
@@ -137,7 +168,7 @@ export function toolEval(
       if (typeof result === 'string') return result;
       return JSON.stringify(result);
     } catch (err) {
-      return `Error: ${(err as Error).message}`;
+      return formatCodeError(err as Error, code);
     }
   }
 
