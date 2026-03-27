@@ -479,6 +479,89 @@ describe('returns option', () => {
   });
 });
 
+describe('jsonSchemaToTypeString', () => {
+  it('converts string enum to union type', () => {
+    expect(jsonSchemaToTypeString({ enum: ['a', 'b', 'c'] })).toBe('"a" | "b" | "c"');
+  });
+
+  it('converts numeric enum to union type', () => {
+    expect(jsonSchemaToTypeString({ enum: [1, 2, 3] })).toBe('1 | 2 | 3');
+  });
+
+  it('converts mixed enum to union type', () => {
+    expect(jsonSchemaToTypeString({ enum: ['a', 1, null] })).toBe('"a" | 1 | null');
+  });
+
+  it('converts single-value enum', () => {
+    expect(jsonSchemaToTypeString({ enum: ['only'] })).toBe('"only"');
+  });
+
+  it('enum takes precedence over type field', () => {
+    expect(jsonSchemaToTypeString({ type: 'string', enum: ['x', 'y'] })).toBe('"x" | "y"');
+  });
+
+  it('z.enum() arg produces correct enum schema in parameters', () => {
+    function pick(choice: string) {
+      return choice;
+    }
+    const wrapped = tool(pick, { args: [z.enum(['foo', 'bar']).describe('Pick one')] });
+    const meta = getToolMetadata(wrapped);
+    const choiceProp = meta.parameters.properties.choice as Record<string, unknown>;
+    expect(choiceProp.enum).toEqual(['foo', 'bar']);
+    expect(jsonSchemaToTypeString(choiceProp)).toBe('"foo" | "bar"');
+  });
+
+  it('z.enum() in returns produces correct type string', () => {
+    function getStatus(_id: string): string {
+      return 'active';
+    }
+    const wrapped = tool(getStatus, {
+      returns: z.enum(['active', 'inactive', 'pending']).describe('Account status'),
+    });
+    const meta = getToolMetadata(wrapped);
+    expect(meta.returns).toBe('Account status');
+    expect(jsonSchemaToTypeString(meta.returnsSchema!)).toBe('"active" | "inactive" | "pending"');
+  });
+
+  it('enum inside object property', () => {
+    expect(
+      jsonSchemaToTypeString({
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          status: { enum: ['active', 'inactive'] },
+        },
+        required: ['name', 'status'],
+      }),
+    ).toBe('{ name: string, status: "active" | "inactive" }');
+  });
+
+  it('array of enum values', () => {
+    expect(
+      jsonSchemaToTypeString({
+        type: 'array',
+        items: { enum: ['red', 'green', 'blue'] },
+      }),
+    ).toBe('"red" | "green" | "blue"[]');
+  });
+
+  it('z.object with z.enum field produces correct nested type string', () => {
+    function createItem(data: { name: string; category: string }) {
+      return data;
+    }
+    const wrapped = tool(createItem, {
+      returns: z.object({
+        name: z.string(),
+        category: z.enum(['Features', 'Fixes', 'Other']),
+      }),
+    });
+    const meta = getToolMetadata(wrapped);
+    expect(jsonSchemaToTypeString(meta.returnsSchema!)).toBe(
+      '{ name: string, category: "Features" | "Fixes" | "Other" }',
+    );
+  });
+});
+
 describe('TOOL_SYMBOL', () => {
   it('is the correct symbol', () => {
     expect(TOOL_SYMBOL).toBe(Symbol.for('tooled-prompt.tool'));
