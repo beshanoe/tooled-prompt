@@ -34,6 +34,8 @@ let anonymousCounter = 0;
  *   → "{ name: string, id: number }"
  */
 export function jsonSchemaToTypeString(schema: Record<string, unknown>): string {
+  const enumValues = schema.enum as unknown[] | undefined;
+  if (enumValues) return enumValues.map((v) => JSON.stringify(v)).join(' | ');
   const type = schema.type as string | undefined;
   if (type === 'string') return 'string';
   if (type === 'number' || type === 'integer') return 'number';
