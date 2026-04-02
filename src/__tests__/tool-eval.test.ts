@@ -190,6 +190,17 @@ describe('toolEval', () => {
     expect(result).toBe(JSON.stringify({ x: 1, y: 'two' }));
   });
 
+  it('passes Uint8Array through as-is for image support', async () => {
+    const pngBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    function getImage() {
+      return pngBytes;
+    }
+    const exec = toolEval(getImage);
+    const result = await exec('return await getImage()');
+    expect(result).toBeInstanceOf(Uint8Array);
+    expect(result).toBe(pngBytes);
+  });
+
   it('returns error message on code error', async () => {
     const exec = toolEval(add);
     const result = await exec('throw new Error("boom")');

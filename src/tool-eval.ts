@@ -151,7 +151,7 @@ export function toolEval(
     };
   });
 
-  async function tool_eval(code: string): Promise<string> {
+  async function tool_eval(code: string): Promise<string | Uint8Array> {
     try {
       const processedCode = preprocessCode(code);
       const fn = new AsyncFunction(...fnNames, processedCode);
@@ -164,6 +164,7 @@ export function toolEval(
       ]);
       clearTimeout(timer!);
 
+      if (result instanceof Uint8Array) return result;
       if (result === undefined || result === null) return 'OK';
       if (typeof result === 'string') return result;
       return JSON.stringify(result);
