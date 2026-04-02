@@ -18,6 +18,7 @@ import dedent from 'dedent';
 import type { TooledPromptEmitter } from './events.js';
 import type { Store } from './store.js';
 import { isImageMarker } from './image.js';
+import { fileTypeFromBuffer } from 'file-type';
 import { getProvider } from './providers/index.js';
 import type { ToolResultInfo, Usage } from './providers/types.js';
 import { TOOLBOX_SYMBOL, type ToolboxFunction } from './toolbox.js';
@@ -304,20 +305,32 @@ export async function runToolLoop<T = string>(
         const paramNames = Object.keys(toolFn[TOOL_SYMBOL].parameters.properties || {});
         const args = paramNames.map((name) => input[name]);
         const rawResult = await toolFn(...args);
-        let result = await resolveIterableResult(rawResult);
-        const { parseReturn } = toolFn[TOOL_SYMBOL];
-        if (parseReturn) {
-          result = parseReturn(result);
-        }
 
         // Handle void/undefined results
         let resultStr: string;
-        if (result === undefined || result === null) {
-          resultStr = 'OK';
-        } else if (typeof result === 'string') {
-          resultStr = result;
+        let images: string[] | undefined;
+
+        if (rawResult instanceof Uint8Array) {
+          // Image buffer returned from tool — convert to data URL
+          const ft = await fileTypeFromBuffer(rawResult);
+          const mime = ft?.mime ?? 'application/octet-stream';
+          const base64 = Buffer.from(rawResult).toString('base64');
+          images = [`data:${mime};base64,${base64}`];
+          resultStr = '[image]';
         } else {
-          resultStr = JSON.stringify(result);
+          let result = await resolveIterableResult(rawResult);
+          const { parseReturn } = toolFn[TOOL_SYMBOL];
+          if (parseReturn) {
+            result = parseReturn(result);
+          }
+
+          if (result === undefined || result === null) {
+            resultStr = 'OK';
+          } else if (typeof result === 'string') {
+            resultStr = result;
+          } else {
+            resultStr = JSON.stringify(result);
+          }
         }
 
         const duration = Date.now() - startTime;
@@ -333,6 +346,7 @@ export async function runToolLoop<T = string>(
           id: toolCall.id,
           name: toolCall.name,
           result: truncated,
+          images,
         });
       } catch (err) {
         const error = err as Error;

@@ -636,6 +636,38 @@ describe('runToolLoop', () => {
     });
   });
 
+  it('converts Uint8Array tool results to image content parts', async () => {
+    // 1x1 transparent PNG
+    const pngBytes = new Uint8Array([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00,
+      0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00, 0x0a, 0x49,
+      0x44, 0x41, 0x54, 0x78, 0x9c, 0x62, 0x00, 0x00, 0x00, 0x02, 0x00, 0x01, 0xe5, 0x27, 0xde, 0xfc, 0x00, 0x00, 0x00,
+      0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+    ]);
+
+    const screenshot = tool(function takeScreenshot() {
+      return pngBytes;
+    });
+
+    mockFetch.mockResolvedValueOnce(
+      mockLLMResponse('', [{ id: 'call1', function: { name: 'take_screenshot', arguments: '{}' } }]),
+    );
+    mockFetch.mockResolvedValueOnce(mockLLMResponse('I see a tiny image'));
+
+    const { result } = await runToolLoop('Take a screenshot', [screenshot], defaultConfig, emitter);
+
+    expect(result).toBe('I see a tiny image');
+
+    // Verify the tool result message contains image content parts
+    const secondCall = mockFetch.mock.calls[1];
+    const body = JSON.parse(secondCall[1].body);
+    const toolMessage = body.messages.find((m: any) => m.role === 'tool');
+    expect(Array.isArray(toolMessage.content)).toBe(true);
+    expect(toolMessage.content).toHaveLength(1);
+    expect(toolMessage.content[0].type).toBe('image_url');
+    expect(toolMessage.content[0].image_url.url).toMatch(/^data:image\/png;base64,/);
+  });
+
   it('returns messages including final assistant message', async () => {
     mockFetch.mockResolvedValue(mockLLMResponse('Hello!'));
 

@@ -266,6 +266,33 @@ describe('OpenAIProvider', () => {
       const results = provider.formatToolResults([{ id: 'call_1', name: 'greet', result: 'Hello, World!' }]);
       expect(results).toEqual([{ role: 'tool', tool_call_id: 'call_1', content: 'Hello, World!' }]);
     });
+
+    it('formats image tool results with content parts', () => {
+      const results = provider.formatToolResults([
+        { id: 'call_1', name: 'screenshot', result: '[image]', images: ['data:image/png;base64,iVBOR'] },
+      ]);
+      expect(results).toEqual([
+        {
+          role: 'tool',
+          tool_call_id: 'call_1',
+          content: [{ type: 'image_url', image_url: { url: 'data:image/png;base64,iVBOR' } }],
+        },
+      ]);
+    });
+
+    it('includes text alongside image when result is not just [image]', () => {
+      const results = provider.formatToolResults([
+        { id: 'call_1', name: 'analyze', result: 'Found 3 objects', images: ['data:image/png;base64,iVBOR'] },
+      ]);
+      expect(results[0]).toEqual({
+        role: 'tool',
+        tool_call_id: 'call_1',
+        content: [
+          { type: 'text', text: 'Found 3 objects' },
+          { type: 'image_url', image_url: { url: 'data:image/png;base64,iVBOR' } },
+        ],
+      });
+    });
   });
 
   describe('parseResponse', () => {

@@ -324,6 +324,30 @@ describe('AnthropicProvider', () => {
       expect(msg.content[0]).toEqual({ type: 'tool_result', tool_use_id: 'toolu_1', content: 'Hello!' });
       expect(msg.content[1]).toEqual({ type: 'tool_result', tool_use_id: 'toolu_2', content: 'Goodbye!' });
     });
+
+    it('formats image tool results with base64 content blocks', () => {
+      const results = provider.formatToolResults([
+        { id: 'toolu_1', name: 'screenshot', result: '[image]', images: ['data:image/png;base64,iVBOR'] },
+      ]);
+      const msg = results[0] as any;
+      expect(msg.content).toHaveLength(1);
+      expect(msg.content[0]).toEqual({
+        type: 'tool_result',
+        tool_use_id: 'toolu_1',
+        content: [{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'iVBOR' } }],
+      });
+    });
+
+    it('includes text alongside image in tool result', () => {
+      const results = provider.formatToolResults([
+        { id: 'toolu_1', name: 'analyze', result: 'Detected objects', images: ['data:image/png;base64,iVBOR'] },
+      ]);
+      const msg = results[0] as any;
+      expect(msg.content[0].content).toEqual([
+        { type: 'text', text: 'Detected objects' },
+        { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'iVBOR' } },
+      ]);
+    });
   });
 
   describe('parseResponse', () => {

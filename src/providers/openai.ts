@@ -25,7 +25,7 @@ export type OpenAIMessage =
   | { role: 'system'; content: PromptContent }
   | { role: 'user'; content: PromptContent }
   | { role: 'assistant'; content: string | null; tool_calls?: OpenAIToolCall[] }
-  | { role: 'tool'; tool_call_id: string; content: string };
+  | { role: 'tool'; tool_call_id: string; content: string | ContentPart[] };
 
 export class OpenAIProvider implements ProviderAdapter<OpenAIMessage> {
   buildRequest(params: BuildRequestParams): BuildRequestResult {
@@ -106,11 +106,19 @@ export class OpenAIProvider implements ProviderAdapter<OpenAIMessage> {
   }
 
   formatToolResults(results: ToolResultInfo[]): OpenAIMessage[] {
-    return results.map((tr) => ({
-      role: 'tool',
-      tool_call_id: tr.id,
-      content: tr.result,
-    }));
+    return results.map((tr) => {
+      if (tr.images?.length) {
+        const parts: ContentPart[] = [];
+        if (tr.result && tr.result !== '[image]') {
+          parts.push({ type: 'text', text: tr.result });
+        }
+        for (const url of tr.images) {
+          parts.push({ type: 'image_url', image_url: { url } });
+        }
+        return { role: 'tool', tool_call_id: tr.id, content: parts } as OpenAIMessage;
+      }
+      return { role: 'tool', tool_call_id: tr.id, content: tr.result };
+    });
   }
 
   async parseResponse(response: Response, streaming: boolean, emitter: TooledPromptEmitter): Promise<ParsedResponse> {

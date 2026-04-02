@@ -25,7 +25,7 @@ type AnthropicContentBlock =
   | { type: 'text'; text: string }
   | { type: 'image'; source: { type: 'base64'; media_type: string; data: string } | { type: 'url'; url: string } }
   | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
-  | { type: 'tool_result'; tool_use_id: string; content: string };
+  | { type: 'tool_result'; tool_use_id: string; content: string | AnthropicContentBlock[] };
 
 export type AnthropicMessage =
   | { role: 'user'; content: string | AnthropicContentBlock[] }
@@ -170,11 +170,24 @@ export class AnthropicProvider implements ProviderAdapter<AnthropicMessage> {
     return [
       {
         role: 'user',
-        content: results.map((tr) => ({
-          type: 'tool_result',
-          tool_use_id: tr.id,
-          content: tr.result,
-        })),
+        content: results.map((tr) => {
+          if (tr.images?.length) {
+            const content: AnthropicContentBlock[] = [];
+            if (tr.result && tr.result !== '[image]') {
+              content.push({ type: 'text', text: tr.result });
+            }
+            for (const url of tr.images) {
+              try {
+                const { mediaType, base64 } = parseDataUrl(url);
+                content.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } });
+              } catch {
+                content.push({ type: 'image', source: { type: 'url', url } });
+              }
+            }
+            return { type: 'tool_result', tool_use_id: tr.id, content } as AnthropicContentBlock;
+          }
+          return { type: 'tool_result', tool_use_id: tr.id, content: tr.result } as AnthropicContentBlock;
+        }),
       },
     ];
   }
