@@ -17,6 +17,8 @@ Runtime LLM prompt library with smart tool recognition for TypeScript.
 - [Usage](#usage)
   - [Basic Inference](#basic-inference)
   - [Image Support](#image-support)
+  - [Images in Prompts](#images-in-prompts)
+  - [Images from Tools](#images-from-tools)
   - [Multiple Tools](#multiple-tools)
   - [Structured Output](#structured-output)
   - [Store Pattern](#store-pattern)
@@ -81,7 +83,7 @@ console.log(data);
 - **Deferred Tool Loading** — Use `toolSearch()` so the LLM discovers tools on demand instead of sending all schemas upfront
 - **Code-Action Tool** — Use `toolEval()` so the LLM writes JavaScript to orchestrate multiple tools in a single turn
 - **Usage Tracking** — Per-call and cumulative token usage across conversation chains
-- **Image Support** — Pass images (Buffer/Uint8Array) directly in templates
+- **Image Support** — Pass images in templates or return them from tools — the LLM sees them
 - **Streaming Events** — Subscribe to content, thinking, and tool events
 - **Multi-Provider** — Built-in support for OpenAI, Anthropic, and Ollama
 - **Multiple Instances** — Create isolated instances for different LLM providers
@@ -114,6 +116,8 @@ const { data } = await prompt`
 
 ### Image Support
 
+#### Images in Prompts
+
 Pass `Buffer` or `Uint8Array` values directly in templates. They are auto-detected and sent as base64 to vision-capable models:
 
 ```typescript
@@ -135,6 +139,23 @@ const { data } = await prompt`
   Before: ${before}
   After: ${after}
 `();
+```
+
+#### Images from Tools
+
+Tools can return `Buffer` or `Uint8Array` values and the LLM will see them as images. This is useful for tools that capture screenshots, generate charts, or load images from disk:
+
+```typescript
+import { prompt, tool } from 'tooled-prompt';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
+
+function loadImage() {
+  return readFileSync(resolve(import.meta.dirname, './image.png'));
+}
+tool(loadImage, { description: 'Load a test image from disk and return it' });
+
+await prompt`Use ${loadImage} to load the image, then describe what you see in detail.`();
 ```
 
 ### Multiple Tools

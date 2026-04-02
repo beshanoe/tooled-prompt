@@ -44,7 +44,7 @@ export type OllamaMessage =
   | { role: 'system'; content: string }
   | { role: 'user'; content: string; images?: string[] }
   | { role: 'assistant'; content: string; tool_calls?: OllamaToolCall[] }
-  | { role: 'tool'; content: string };
+  | { role: 'tool'; content: string; images?: string[] };
 
 function extractBase64Images(parts: ContentPart[]): string[] {
   const images: string[] = [];
@@ -147,10 +147,21 @@ export class OllamaProvider implements ProviderAdapter<OllamaMessage> {
   }
 
   formatToolResults(results: ToolResultInfo[]): OllamaMessage[] {
-    return results.map((tr) => ({
-      role: 'tool',
-      content: tr.result,
-    }));
+    return results.map((tr) => {
+      if (tr.images?.length) {
+        const images: string[] = [];
+        for (const url of tr.images) {
+          try {
+            const { base64 } = parseDataUrl(url);
+            images.push(base64);
+          } catch {
+            // Skip non-data URLs
+          }
+        }
+        return { role: 'tool', content: tr.result, images } as OllamaMessage;
+      }
+      return { role: 'tool', content: tr.result } as OllamaMessage;
+    });
   }
 
   async parseResponse(response: Response, streaming: boolean, emitter: TooledPromptEmitter): Promise<ParsedResponse> {

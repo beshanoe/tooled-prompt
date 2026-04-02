@@ -18,6 +18,8 @@ export interface ToolResultInfo {
   id: string;
   name: string;
   result: string;
+  /** Base64 data-URL images returned by the tool */
+  images?: string[];
 }
 
 export interface Usage {

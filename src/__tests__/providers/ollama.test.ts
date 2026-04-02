@@ -198,6 +198,13 @@ describe('OllamaProvider', () => {
       const results = provider.formatToolResults([{ id: 'ollama_0', name: 'greet', result: 'Hello!' }]);
       expect(results).toEqual([{ role: 'tool', content: 'Hello!' }]);
     });
+
+    it('formats image tool results with base64 images array', () => {
+      const results = provider.formatToolResults([
+        { id: 'ollama_0', name: 'screenshot', result: '[image]', images: ['data:image/png;base64,iVBOR'] },
+      ]);
+      expect(results).toEqual([{ role: 'tool', content: '[image]', images: ['iVBOR'] }]);
+    });
   });
 
   describe('parseResponse', () => {
