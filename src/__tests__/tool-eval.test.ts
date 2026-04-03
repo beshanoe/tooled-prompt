@@ -201,6 +201,24 @@ describe('toolEval', () => {
     expect(result).toBe(pngBytes);
   });
 
+  it('calls result if LLM wraps code in an arrow function', async () => {
+    const exec = toolEval(add);
+    const result = await exec('async () => {\n  return await add("1", "2");\n}');
+    expect(result).toBe('3');
+  });
+
+  it('calls result if LLM wraps code in an arrow with expression body', async () => {
+    const exec = toolEval(add);
+    const result = await exec('() => add("3", "4")');
+    expect(result).toBe('7');
+  });
+
+  it('calls result if LLM wraps code in a function expression', async () => {
+    const exec = toolEval(add);
+    const result = await exec('(async function() {\n  return await add("5", "6");\n})');
+    expect(result).toBe('11');
+  });
+
   it('returns error message on code error', async () => {
     const exec = toolEval(add);
     const result = await exec('throw new Error("boom")');

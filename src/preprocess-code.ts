@@ -79,6 +79,16 @@ export function preprocessCode(code: string): string {
   // Use the inner expression's range to avoid including the trailing semicolon
   if (last.type === 'ExpressionStatement' && last.expression) {
     const expr = last.expression;
+    // Bare arrow/function expression with no params → IIFE so it executes instead of being returned
+    if (
+      (expr.type === 'ArrowFunctionExpression' || expr.type === 'FunctionExpression') &&
+      Array.isArray((expr as any).params) &&
+      (expr as any).params.length === 0
+    ) {
+      return (
+        code.slice(0, last.start) + 'return await (' + code.slice(expr.start, expr.end) + ')()' + code.slice(last.end)
+      );
+    }
     return code.slice(0, last.start) + 'return (' + code.slice(expr.start, expr.end) + ')' + code.slice(last.end);
   }
 

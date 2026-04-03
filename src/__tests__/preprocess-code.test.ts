@@ -85,6 +85,36 @@ describe('preprocessCode', () => {
     expect(preprocessCode(code)).toBe('async function main() {\n  return 42;\n}\nreturn (main())');
   });
 
+  it('IIFE-wraps async arrow with block body', () => {
+    const code = 'async () => {\n  return await fn();\n}';
+    expect(preprocessCode(code)).toBe('return await (async () => {\n  return await fn();\n})()');
+  });
+
+  it('IIFE-wraps async arrow with expression body', () => {
+    expect(preprocessCode('async () => await fn()')).toBe('return await (async () => await fn())()');
+  });
+
+  it('IIFE-wraps sync arrow with block body', () => {
+    const code = '() => {\n  return 42;\n}';
+    expect(preprocessCode(code)).toBe('return await (() => {\n  return 42;\n})()');
+  });
+
+  it('IIFE-wraps function expression', () => {
+    const code = '(async function() {\n  return await fn();\n})';
+    expect(preprocessCode(code)).toBe('return await (async function() {\n  return await fn();\n})()');
+  });
+
+  it('does not IIFE-wrap arrow with parameters', () => {
+    expect(preprocessCode('(x) => x + 1')).toBe('return ((x) => x + 1)');
+  });
+
+  it('IIFE-wraps real LLM pattern with multi-statement block', () => {
+    const code = 'async () => {\n  const count = await getUniquePostsCount();\n  return { count: count };\n}';
+    expect(preprocessCode(code)).toBe(
+      'return await (async () => {\n  const count = await getUniquePostsCount();\n  return { count: count };\n})()',
+    );
+  });
+
   it('handles mixed helper + main pattern from real LLM output', () => {
     const code = `async function helper(id) {
   return await getItem(id);
