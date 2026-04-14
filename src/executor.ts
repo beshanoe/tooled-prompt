@@ -196,33 +196,56 @@ export async function runToolLoop<T = string>(
       schema: schema ? { jsonSchema: schema.jsonSchema } : undefined,
     });
 
-    // Set up timeout with AbortController
+    // Set up timeout with AbortController.
+    // The timer must stay armed through body consumption: aborting the fetch
+    // signal alone does not reliably terminate an already-opened response
+    // body stream, so when it fires we also call body.cancel() to force the
+    // ReadableStream closed.
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    let response: Response | undefined;
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+      response?.body?.cancel().catch(() => {});
+    }, timeout);
 
-    let response: Response;
+    let parsed: Awaited<ReturnType<typeof provider.parseResponse>>;
     try {
-      response = await fetch(url, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
-    } catch (err) {
-      clearTimeout(timeoutId);
-      if ((err as Error).name === 'AbortError') {
+      try {
+        response = await fetch(url, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+      } catch (err) {
+        if ((err as Error).name === 'AbortError') {
+          throw new Error(`Request timeout after ${timeout}ms`);
+        }
+        throw err;
+      }
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`LLM request failed (${response.status}): ${text}`);
+      }
+
+      try {
+        parsed = await provider.parseResponse(response, useStreaming, emitter);
+      } catch (err) {
+        if ((err as Error).name === 'AbortError' || controller.signal.aborted) {
+          throw new Error(`Request timeout after ${timeout}ms`);
+        }
+        throw err;
+      }
+      // If the timer fired during body reading, body.cancel() closed the
+      // stream cleanly and parseResponse returned partial content. That's
+      // still a timeout from the caller's perspective.
+      if (controller.signal.aborted) {
         throw new Error(`Request timeout after ${timeout}ms`);
       }
-      throw err;
+    } finally {
+      clearTimeout(timeoutId);
     }
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`LLM request failed (${response.status}): ${text}`);
-    }
-
-    const parsed = await provider.parseResponse(response, useStreaming, emitter);
     const { content, toolCalls: rawToolCalls } = parsed;
 
     if (parsed.usage) {
