@@ -1,78 +1,96 @@
 /**
- * Function introspection for smart tool recognition
+ * Function introspection for LLM tool wrapping.
  *
- * Extracts function name and parameters from fn.toString()
+ * Runs at runtime against compiled JavaScript — TypeScript syntax
+ * (type annotations, `?` optional, generics) has already been stripped
+ * before `fn.toString()` returns. We only need two things:
  *
- * IMPORTANT: This parses JavaScript at runtime, NOT TypeScript source.
- * TypeScript's `?` optional syntax is stripped during compilation.
- * Only parameters with default values can be detected as optional.
+ *   1. Param names (for auto-generated JSON Schema property keys).
+ *   2. Whether each param has a default value — the only form of
+ *      optionality that survives compilation.
  *
- * Examples:
- * - fn(x?: string) → compiled to fn(x) → NOT detectable as optional
- * - fn(x = 'default') → compiled to fn(x = 'default') → IS detectable as optional
+ * Acorn does the actual parsing; this module just picks a wrapping
+ * that makes the source a valid expression and walks the resulting
+ * param AST.
  */
 
-/**
- * Parsed function information
- */
+import { parse } from 'acorn';
+
 export interface ParsedFunction {
   name: string;
   params: Array<{ name: string; optional: boolean }>;
 }
 
-/**
- * Parse a function to extract its name and parameters
- *
- * Handles:
- * - Regular functions: function foo(a, b) {}
- * - Async functions: async function foo(a, b) {}
- * - Arrow functions: (a, b) => {}
- * - Async arrow functions: async (a, b) => {}
- * - Methods: foo(a, b) {}
- * - TypeScript typed params: (a: string, b?: number) => {}
- */
+interface ParamNode {
+  type: string;
+  name?: string;
+  left?: ParamNode;
+  argument?: ParamNode;
+}
+
+interface FnNode {
+  type: string;
+  params: ParamNode[];
+}
+
 // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
 export function parseFunction(fn: Function): ParsedFunction {
   const name = fn.name || 'anonymous';
-  const str = fn.toString();
+  const node = parseToFunctionNode(fn.toString());
+  if (!node) return { name, params: [] };
+  return { name, params: node.params.map(paramInfo) };
+}
 
-  // Extract params from function signature
-  // Pattern 1: function name(params), async function name(params), (params) =>, async (params) =>
-  let match = str.match(/^(?:async\s+)?(?:function\s*\w*)?\s*\(([^)]*)\)/);
+/**
+ * Parse the function source into a function-like AST node.
+ *
+ * Tries two wrappings so every shape `fn.toString()` can produce is covered:
+ *   - `(src)`     → function declarations/expressions, arrows, async variants
+ *   - `({src})`   → object/class method shorthand, e.g. `foo(a) {}`
+ */
+function parseToFunctionNode(src: string): FnNode | null {
+  const asExpression = tryParse(`(${src})`, (ast) => ast.body[0]?.expression);
+  if (isFunctionNode(asExpression)) return asExpression;
 
-  // Pattern 2: Arrow function with single unparenthesized param: async param => {}, param => {}
-  if (!match) {
-    match = str.match(/^(?:async\s+)?(\w+)\s*=>/);
+  const asMethod = tryParse(`({${src}})`, (ast) => ast.body[0]?.expression?.properties?.[0]?.value);
+  if (isFunctionNode(asMethod)) return asMethod;
+
+  return null;
+}
+
+function tryParse(source: string, pick: (ast: any) => unknown): unknown {
+  try {
+    const ast = parse(source, { ecmaVersion: 'latest' });
+    return pick(ast);
+  } catch {
+    return null;
   }
+}
 
-  const paramsStr = match?.[1] || '';
+function isFunctionNode(node: unknown): node is FnNode {
+  const t = (node as { type?: string } | null)?.type;
+  return t === 'FunctionExpression' || t === 'ArrowFunctionExpression';
+}
 
-  if (!paramsStr.trim()) {
-    return { name, params: [] };
+/**
+ * Convert an acorn param-pattern node into `{ name, optional }`.
+ *
+ *   Identifier         `x`         → { name: 'x',      optional: false }
+ *   AssignmentPattern  `x = 1`     → { name: <inner>,  optional: true  }
+ *   RestElement        `...rest`   → { name: 'rest',   optional: true  }
+ *   ObjectPattern      `{ a, b }`  → { name: 'args<i>',optional: false }
+ *   ArrayPattern       `[x, y]`    → { name: 'args<i>',optional: false }
+ */
+function paramInfo(node: ParamNode, index: number): { name: string; optional: boolean } {
+  switch (node.type) {
+    case 'Identifier':
+      return { name: node.name!, optional: false };
+    case 'AssignmentPattern':
+      return { name: paramInfo(node.left!, index).name, optional: true };
+    case 'RestElement':
+      return { name: paramInfo(node.argument!, index).name, optional: true };
+    default:
+      // ObjectPattern, ArrayPattern — no single recoverable name
+      return { name: `args${index}`, optional: false };
   }
-
-  const params = paramsStr
-    .split(',')
-    .map((p) => p.trim())
-    .filter(Boolean)
-    .map((p) => {
-      // Check for default value BEFORE stripping it - indicates optional param
-      // At runtime, "name = 'default'" is the only way to detect optionality
-      // TypeScript's `?` syntax is stripped during compilation
-      const hasDefault = p.includes('=');
-
-      // Strip type annotations: "name: string" → "name", "name?: string" → "name?"
-      // Strip default values: "name = 'default'" → "name"
-      const paramName = p.split(':')[0].split('=')[0].trim();
-
-      // At runtime, TypeScript's `?` is usually stripped, but check anyway
-      const hasTsOptional = paramName.endsWith('?');
-
-      return {
-        name: paramName.replace('?', ''),
-        optional: hasDefault || hasTsOptional,
-      };
-    });
-
-  return { name, params };
 }

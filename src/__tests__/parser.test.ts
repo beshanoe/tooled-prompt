@@ -144,6 +144,90 @@ describe('parseFunction', () => {
     });
   });
 
+  describe('destructured parameters', () => {
+    it('names a single destructured object param as `args0`', () => {
+      function withObj({ a, b }: { a: string; b: number }) {
+        return a + b;
+      }
+      const result = parseFunction(withObj);
+      expect(result.name).toBe('withObj');
+      expect(result.params).toEqual([{ name: 'args0', optional: false }]);
+    });
+
+    it('names a single destructured array param as `args0`', () => {
+      function withArr([x, y]: [string, number]) {
+        return x + y;
+      }
+      const result = parseFunction(withArr);
+      expect(result.params).toEqual([{ name: 'args0', optional: false }]);
+    });
+
+    it('keeps nested commas inside destructure as one param', () => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      function many({ a, b, c }: { a: string; b: number; c: boolean }) {
+        return a;
+      }
+      const result = parseFunction(many);
+      expect(result.params.length).toBe(1);
+      expect(result.params[0].name).toBe('args0');
+    });
+
+    it('indexes multiple destructured params', () => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      function two({ a }: { a: string }, { b }: { b: number }) {
+        return a;
+      }
+      const result = parseFunction(two);
+      expect(result.params).toEqual([
+        { name: 'args0', optional: false },
+        { name: 'args1', optional: false },
+      ]);
+    });
+
+    it('mixes destructured and named params correctly', () => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      function mixed({ a }: { a: string }, plain: number) {
+        return a;
+      }
+      const result = parseFunction(mixed);
+      expect(result.params).toEqual([
+        { name: 'args0', optional: false },
+        { name: 'plain', optional: false },
+      ]);
+    });
+
+    it('detects default value on destructured param', () => {
+      function withDefault({ a }: { a?: string } = {}) {
+        return a;
+      }
+      const result = parseFunction(withDefault);
+      expect(result.params).toEqual([{ name: 'args0', optional: true }]);
+    });
+
+    it('ignores `=` inside destructure pattern when checking for default', () => {
+      // `{ a = 1 }` is an inner destructure default, not a param default
+      function inner({ a = 1 }: { a?: number }) {
+        return a;
+      }
+      const result = parseFunction(inner);
+      expect(result.params).toEqual([{ name: 'args0', optional: false }]);
+    });
+  });
+
+  describe('rest parameters', () => {
+    it('marks rest param as optional and exposes its identifier name', () => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      function withRest(first: string, ...rest: number[]) {
+        return first;
+      }
+      const result = parseFunction(withRest);
+      expect(result.params).toEqual([
+        { name: 'first', optional: false },
+        { name: 'rest', optional: true },
+      ]);
+    });
+  });
+
   describe('runtime limitations', () => {
     it('TypeScript optional syntax (?) is NOT detectable at runtime', () => {
       // TypeScript compiles fn(x?: string) to fn(x) - the ? is stripped

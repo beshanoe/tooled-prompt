@@ -6,7 +6,15 @@
  * multiple tools in a single turn. The runtime executes it via AsyncFunction.
  */
 
-import { tool, jsonSchemaToTypeString } from './tool.js';
+import { tool } from './tool.js';
+import {
+  renderParam,
+  renderReturns,
+  renderTypedef,
+  collectTypedefs,
+  type Schema,
+  type TypedefSource,
+} from './jsdoc.js';
 import { TOOL_SYMBOL, type ToolFunction } from './types.js';
 import { preprocessCode } from './preprocess-code.js';
 
@@ -53,26 +61,29 @@ const AsyncFunction: new (...args: string[]) => (...args: any[]) => Promise<any>
 
 /**
  * Build a JSDoc-style signature string for a single function.
+ *
+ * Thin adapter: reads the tool's parameters/returns schemas and delegates
+ * line rendering to `jsdoc.ts`. When `refs` names shared shapes, field types
+ * collapse to typedef references (e.g. `{T1[]}`) instead of inline expansion.
  */
-function buildSignature(fn: (...args: any[]) => any, meta: ToolFunction[typeof TOOL_SYMBOL]): string {
-  const params = Object.entries(meta.parameters.properties || {});
-
+function buildSignature(
+  fn: (...args: any[]) => any,
+  meta: ToolFunction[typeof TOOL_SYMBOL],
+  refs: Map<string, string>,
+): string {
+  const params = Object.entries((meta.parameters.properties || {}) as Record<string, Schema>);
   const required = new Set(meta.parameters.required || []);
 
-  const lines: string[] = [];
-  lines.push('/**');
-  lines.push(` * ${meta.description}`);
-  for (const [name, prop] of params) {
-    const typeStr = jsonSchemaToTypeString(prop as Record<string, unknown>);
-    const desc = (prop as any).description || '';
-    const paramName = required.has(name) ? name : `[${name}]`;
-    lines.push(` * @param {${typeStr}} ${paramName}${desc ? ` - ${desc}` : ''}`);
+  const lines: string[] = ['/**', ` * ${meta.description}`];
+
+  for (const [name, schema] of params) {
+    lines.push(...renderParam(name, schema, !required.has(name), refs));
   }
+
   if (meta.returnsSchema || meta.returns) {
-    const type = meta.returnsSchema ? `{${jsonSchemaToTypeString(meta.returnsSchema)}} ` : '';
-    const desc = meta.returns || '';
-    lines.push(` * @returns ${type}${desc}`.trimEnd());
+    lines.push(...renderReturns(meta.returnsSchema as Schema | undefined, meta.returns || '', refs));
   }
+
   lines.push(' */');
 
   const paramList = params.map(([name]) => name).join(', ');
@@ -82,16 +93,37 @@ function buildSignature(fn: (...args: any[]) => any, meta: ToolFunction[typeof T
 
 /**
  * Build the full description for the tool_eval meta-tool.
+ *
+ * First runs a dedup pass across every tool's parameter/return schemas to
+ * find object shapes worth promoting to `@typedef`. Shared shapes (used in
+ * ≥2 places) and object returns (since dotted `@returns.field` is non-standard
+ * JSDoc) get hoisted into a single typedef block, and every signature below
+ * references them by name.
  */
 function buildDescription(fns: ((...args: any[]) => any)[], tools: ToolFunction[]): string {
   const preamble = 'Execute JavaScript code that orchestrates multiple tool calls in a single turn.';
 
-  const signatures = fns.map((fn, i) => buildSignature(fn, tools[i][TOOL_SYMBOL])).join('\n\n');
+  const sources: TypedefSource[] = tools.map((t) => {
+    const meta = t[TOOL_SYMBOL];
+    return {
+      paramSchemas: Object.values((meta.parameters.properties || {}) as Record<string, Schema>),
+      returnSchema: meta.returnsSchema as Schema | undefined,
+    };
+  });
+  const { typedefs, refs } = collectTypedefs(sources);
+
+  let typedefBlock = '';
+  if (typedefs.length > 0) {
+    const blocks = typedefs.map((td) => ['/**', ...renderTypedef(td.name, td.schema, refs), ' */'].join('\n'));
+    typedefBlock = `${blocks.join('\n\n')}\n\n`;
+  }
+
+  const signatures = fns.map((fn, i) => buildSignature(fn, tools[i][TOOL_SYMBOL], refs)).join('\n\n');
 
   return `${preamble}
 Write the body of an async function. Available functions:
 
-${signatures}
+${typedefBlock}${signatures}
 
 Use \`return\` to produce a result.`;
 }

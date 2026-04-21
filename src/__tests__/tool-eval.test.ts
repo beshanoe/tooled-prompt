@@ -108,6 +108,255 @@ describe('toolEval', () => {
     expect(desc).toContain('@param {string} [limit] - Max results');
   });
 
+  describe('object-typed params/returns expand to dotted JSDoc lines', () => {
+    it('expands object @param fields to canonical dot notation when any field has a description', () => {
+      function createUser(opts: { name: string; age?: number }) {
+        return opts;
+      }
+      const wrapped = tool(createUser, {
+        args: [
+          z.object({
+            name: z.string().describe("The user's name"),
+            age: z.number().optional().describe('Optional age'),
+          }),
+        ],
+      });
+      const exec = toolEval(wrapped);
+      const desc = exec[TOOL_SYMBOL].description;
+      expect(desc).toContain('@param {Object} opts');
+      expect(desc).toContain("@param {string} opts.name - The user's name");
+      expect(desc).toContain('@param {number} [opts.age] - Optional age');
+    });
+
+    it('promotes object @returns to a @typedef block referenced by name', () => {
+      function getReminder(_id: number): { id: number; dueAt: string | null } {
+        return { id: 1, dueAt: null };
+      }
+      const wrapped = tool(getReminder, {
+        returns: z.object({
+          id: z.number(),
+          dueAt: z.string().describe('Local time YYYY-MM-DD HH:mm:ss').nullable(),
+        }),
+      });
+      const exec = toolEval(wrapped);
+      const desc = exec[TOOL_SYMBOL].description;
+      expect(desc).toContain('@typedef {Object} T1');
+      expect(desc).toContain('@property {number} id');
+      expect(desc).toContain('@property {string | null} dueAt - Local time YYYY-MM-DD HH:mm:ss');
+      expect(desc).toContain('@returns {T1}');
+      // Dotted @returns is non-standard and should no longer appear
+      expect(desc).not.toMatch(/@returns \{.*\} returns\./);
+    });
+
+    it('promotes array-of-object @returns and references as T1[]', () => {
+      function listReminders() {
+        return [] as { id: number; dueAt: string | null }[];
+      }
+      const wrapped = tool(listReminders, {
+        returns: z.array(
+          z.object({
+            id: z.number(),
+            dueAt: z.string().describe('Local time YYYY-MM-DD HH:mm:ss').nullable(),
+          }),
+        ),
+      });
+      const exec = toolEval(wrapped);
+      const desc = exec[TOOL_SYMBOL].description;
+      expect(desc).toContain('@typedef {Object} T1');
+      expect(desc).toContain('@property {number} id');
+      expect(desc).toContain('@property {string | null} dueAt - Local time YYYY-MM-DD HH:mm:ss');
+      expect(desc).toContain('@returns {T1[]}');
+      expect(desc).not.toMatch(/@returns \{.*\} returns\[?\]?\./);
+    });
+
+    it('deduplicates shared shapes across multiple tools into one typedef', () => {
+      const Reminder = z.object({
+        id: z.number(),
+        dueAt: z.string().describe('Local time YYYY-MM-DD HH:mm:ss').nullable(),
+      });
+      function getReminder(_id: number): { id: number; dueAt: string | null } {
+        return { id: 1, dueAt: null };
+      }
+      function listReminders(): { id: number; dueAt: string | null }[] {
+        return [];
+      }
+      const one = tool(getReminder, { returns: Reminder });
+      const many = tool(listReminders, { returns: z.array(Reminder) });
+      const exec = toolEval(one, many);
+      const desc = exec[TOOL_SYMBOL].description;
+      // Exactly one @typedef block for the shared shape
+      expect(desc.match(/@typedef \{Object\} T\d+/g)).toHaveLength(1);
+      // Both signatures reference it
+      expect(desc).toContain('@returns {T1}');
+      expect(desc).toContain('@returns {T1[]}');
+    });
+
+    it('promoted typedef references dedup shared nested shapes by name', () => {
+      const TimeRange = z.object({
+        start: z.string().describe('ISO timestamp'),
+        end: z.string(),
+      });
+      function findOne(_q: string): { id: number; window: { start: string; end: string } } {
+        return { id: 1, window: { start: '', end: '' } };
+      }
+      function findMany(_q: string): { id: number; window: { start: string; end: string } }[] {
+        return [];
+      }
+      const one = tool(findOne, { returns: z.object({ id: z.number(), window: TimeRange }) });
+      const many = tool(findMany, {
+        returns: z.array(z.object({ id: z.number(), window: TimeRange })),
+      });
+      const exec = toolEval(one, many);
+      const desc = exec[TOOL_SYMBOL].description;
+      // TimeRange appears twice so it gets its own typedef, referenced by the
+      // outer typedef's `window` property instead of inlined.
+      const typedefCount = (desc.match(/@typedef \{Object\} T\d+/g) || []).length;
+      expect(typedefCount).toBeGreaterThanOrEqual(2);
+      // Outer typedef references the inner one
+      expect(desc).toMatch(/@property \{T\d+\} window/);
+      // Inner typedef defines the ISO timestamp description
+      expect(desc).toContain('@property {string} start - ISO timestamp');
+    });
+
+    it('promotes a large single-use @param shape to a typedef when dotted expansion would outweigh it', () => {
+      function upsertEntity(input: {
+        id: string;
+        name: string;
+        description: string;
+        tags: string[];
+        priority: number;
+      }) {
+        return input;
+      }
+      const wrapped = tool(upsertEntity, {
+        args: [
+          z.object({
+            id: z.string().describe('Unique ID'),
+            name: z.string().describe('Display name'),
+            description: z.string().describe('Free-form description'),
+            tags: z.array(z.string()).describe('Tag list'),
+            priority: z.number().describe('Sort priority'),
+          }),
+        ],
+      });
+      const exec = toolEval(wrapped);
+      const desc = exec[TOOL_SYMBOL].description;
+      // Single-use shape with 5 described fields → promoted, not dot-expanded
+      expect(desc).toContain('@typedef {Object} T1');
+      expect(desc).toContain('@property {string} id - Unique ID');
+      expect(desc).toContain('@param {T1} input');
+      expect(desc).not.toContain('input.id');
+      expect(desc).not.toContain('input.name');
+    });
+
+    it('keeps small single-use @param shapes inline (below promotion threshold)', () => {
+      function createUser(opts: { name: string; age?: number }) {
+        return opts;
+      }
+      const wrapped = tool(createUser, {
+        args: [
+          z.object({
+            name: z.string().describe("The user's name"),
+            age: z.number().optional().describe('Optional age'),
+          }),
+        ],
+      });
+      const exec = toolEval(wrapped);
+      const desc = exec[TOOL_SYMBOL].description;
+      // 2 fields → below threshold → stays as dotted inline expansion
+      expect(desc).not.toContain('@typedef');
+      expect(desc).toContain('@param {Object} opts');
+      expect(desc).toContain("@param {string} opts.name - The user's name");
+    });
+
+    it('saves tokens vs full dotted expansion on a multi-tool fixture', () => {
+      const Reminder = z.object({
+        id: z.number(),
+        title: z.string().describe('Reminder title'),
+        dueAt: z.string().describe('Local time YYYY-MM-DD HH:mm:ss').nullable(),
+        tags: z.array(z.string()),
+      });
+      type R = { id: number; title: string; dueAt: string | null; tags: string[] };
+      function getReminder(_id: number): R {
+        return { id: 1, title: '', dueAt: null, tags: [] };
+      }
+      function listReminders(): R[] {
+        return [];
+      }
+      function createReminder(_input: { title: string }): R {
+        return { id: 1, title: '', dueAt: null, tags: [] };
+      }
+      const exec = toolEval(
+        tool(getReminder, { returns: Reminder }),
+        tool(listReminders, { returns: z.array(Reminder) }),
+        tool(createReminder, { returns: Reminder }),
+      );
+      const desc = exec[TOOL_SYMBOL].description;
+      // Single typedef for Reminder, three references — clearly shorter than
+      // inlining the three described properties three times over.
+      const typedefMatches = desc.match(/@typedef \{Object\} T1/g) || [];
+      expect(typedefMatches).toHaveLength(1);
+      const t1Refs = desc.match(/\{T1(?:\[\])?\}/g) || [];
+      expect(t1Refs.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it('keeps compact inline type when no nested descriptions exist', () => {
+      function findUser(id: string): { name: string; id: number } {
+        return { name: 'Alice', id: Number(id) };
+      }
+      const wrapped = tool(findUser, {
+        returns: z.object({ name: z.string(), id: z.number() }).describe('A user record'),
+      });
+      const exec = toolEval(wrapped);
+      const desc = exec[TOOL_SYMBOL].description;
+      expect(desc).toContain('@returns {{ name: string, id: number }} A user record');
+      expect(desc).not.toMatch(/@returns \{.*\} returns\./);
+    });
+
+    it('recurses into nested objects with dotted paths', () => {
+      function withAddress(data: { user: { name: string; city: string } }) {
+        return data;
+      }
+      const wrapped = tool(withAddress, {
+        args: [
+          z.object({
+            user: z.object({
+              name: z.string(),
+              city: z.string().describe('City name'),
+            }),
+          }),
+        ],
+      });
+      const exec = toolEval(wrapped);
+      const desc = exec[TOOL_SYMBOL].description;
+      expect(desc).toContain('@param {string} data.user.city - City name');
+    });
+
+    it('renders destructured-param tools with a clean synthetic param name', () => {
+      // This was previously broken: destructured params parsed as `"{a"` and
+      // polluted all dotted lines (e.g. `{a.field`). They should render as `args0`.
+      function markDone({ id, stop }: { id: number; stop?: boolean }) {
+        return stop ? `stopped ${id}` : `done ${id}`;
+      }
+      const wrapped = tool(markDone, {
+        args: [
+          z.object({
+            id: z.number().describe('Reminder ID'),
+            stop: z.boolean().optional().describe('Stop recurring'),
+          }),
+        ],
+      });
+      const exec = toolEval(wrapped);
+      const desc = exec[TOOL_SYMBOL].description;
+      // Clean synthetic name — no `{` leak
+      expect(desc).not.toContain('{id.');
+      expect(desc).not.toContain('{args0');
+      expect(desc).toContain('@param {Object} args0');
+      expect(desc).toContain('@param {number} args0.id - Reminder ID');
+      expect(desc).toContain('@param {boolean} [args0.stop] - Stop recurring');
+    });
+  });
+
   it('auto-parses return values when tool has Zod returns schema', async () => {
     function lookupUser(id: string): { name: string; id: number } {
       return { name: 'Alice', id: Number(id) };
