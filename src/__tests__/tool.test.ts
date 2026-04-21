@@ -562,6 +562,32 @@ describe('jsonSchemaToTypeString', () => {
   });
 });
 
+describe('jsonSchemaToTypeString — anyOf/oneOf unions', () => {
+  it('renders anyOf of primitives as a union', () => {
+    expect(jsonSchemaToTypeString({ anyOf: [{ type: 'string' }, { type: 'number' }] })).toBe('string | number');
+  });
+
+  it('renders nullable (anyOf with null) as `T | null`', () => {
+    expect(jsonSchemaToTypeString({ anyOf: [{ type: 'string' }, { type: 'null' }] })).toBe('string | null');
+  });
+
+  it('renders oneOf the same as anyOf', () => {
+    expect(jsonSchemaToTypeString({ oneOf: [{ type: 'boolean' }, { type: 'null' }] })).toBe('boolean | null');
+  });
+
+  it('renders nullable inside an object property', () => {
+    expect(
+      jsonSchemaToTypeString({
+        type: 'object',
+        properties: {
+          dueAt: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+        },
+        required: ['dueAt'],
+      }),
+    ).toBe('{ dueAt: string | null }');
+  });
+});
+
 describe('TOOL_SYMBOL', () => {
   it('is the correct symbol', () => {
     expect(TOOL_SYMBOL).toBe(Symbol.for('tooled-prompt.tool'));

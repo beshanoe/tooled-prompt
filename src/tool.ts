@@ -25,36 +25,12 @@ import {
 // Re-export for convenience
 export { TOOL_SYMBOL, type ToolMetadata, type ToolFunction };
 
+// Schema-rendering helpers live in jsdoc.ts; re-exported here for callers
+// that have historically imported them from this module (including tests).
+export { jsonSchemaToTypeString } from './jsdoc.js';
+
 // Counter for anonymous functions
 let anonymousCounter = 0;
-
-/**
- * Convert a JSON Schema to a compact TS-like type string.
- * e.g. { type: "object", properties: { name: { type: "string" }, id: { type: "number" } } }
- *   → "{ name: string, id: number }"
- */
-export function jsonSchemaToTypeString(schema: Record<string, unknown>): string {
-  const enumValues = schema.enum as unknown[] | undefined;
-  if (enumValues) return enumValues.map((v) => JSON.stringify(v)).join(' | ');
-  const type = schema.type as string | undefined;
-  if (type === 'string') return 'string';
-  if (type === 'number' || type === 'integer') return 'number';
-  if (type === 'boolean') return 'boolean';
-  if (type === 'null') return 'null';
-  if (type === 'array') {
-    const items = schema.items as Record<string, unknown> | undefined;
-    return items ? `${jsonSchemaToTypeString(items)}[]` : 'unknown[]';
-  }
-  if (type === 'object' && schema.properties) {
-    const props = schema.properties as Record<string, Record<string, unknown>>;
-    const req = new Set((schema.required as string[]) || []);
-    const fields = Object.entries(props)
-      .map(([k, v]) => `${k}${req.has(k) ? '' : '?'}: ${jsonSchemaToTypeString(v)}`)
-      .join(', ');
-    return `{ ${fields} }`;
-  }
-  return 'object';
-}
 
 /**
  * Convert camelCase/PascalCase to snake_case.
