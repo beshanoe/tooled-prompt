@@ -53,6 +53,7 @@ const DEFAULTS: ResolvedTooledPromptConfig = {
   maxTokens: undefined,
   systemPrompt: undefined,
   maxToolResultLength: undefined,
+  streamChunkTimeoutMs: undefined,
 };
 
 /**
@@ -71,6 +72,12 @@ function validateConfig(config: TooledPromptConfig): void {
   }
   if (config.maxTokens !== undefined && (config.maxTokens < 1 || !Number.isInteger(config.maxTokens))) {
     throw new Error('maxTokens must be a positive integer');
+  }
+  if (
+    config.streamChunkTimeoutMs !== undefined &&
+    (config.streamChunkTimeoutMs <= 0 || !Number.isFinite(config.streamChunkTimeoutMs))
+  ) {
+    throw new Error('streamChunkTimeoutMs must be a positive number');
   }
 }
 

@@ -67,5 +67,10 @@ export interface ProviderAdapter<TMessage = unknown> {
   formatToolResults(results: ToolResultInfo[]): TMessage[];
 
   /** Parse HTTP response (streaming or non-streaming) into common format */
-  parseResponse(response: Response, streaming: boolean, emitter: TooledPromptEmitter): Promise<ParsedResponse>;
+  parseResponse(
+    response: Response,
+    streaming: boolean,
+    emitter: TooledPromptEmitter,
+    chunkTimeoutMs?: number,
+  ): Promise<ParsedResponse>;
 }

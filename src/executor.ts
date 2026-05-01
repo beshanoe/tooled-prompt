@@ -230,7 +230,7 @@ export async function runToolLoop<T = string>(
       }
 
       try {
-        parsed = await provider.parseResponse(response, useStreaming, emitter);
+        parsed = await provider.parseResponse(response, useStreaming, emitter, config.streamChunkTimeoutMs);
       } catch (err) {
         if ((err as Error).name === 'AbortError' || controller.signal.aborted) {
           throw new Error(`Request timeout after ${timeout}ms`);

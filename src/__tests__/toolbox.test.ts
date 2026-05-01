@@ -104,6 +104,7 @@ describe('toolSearch', () => {
         maxTokens: undefined,
         systemPrompt: undefined,
         maxToolResultLength: undefined,
+        streamChunkTimeoutMs: undefined,
       };
     });
 

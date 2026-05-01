@@ -192,7 +192,12 @@ export class AnthropicProvider implements ProviderAdapter<AnthropicMessage> {
     ];
   }
 
-  async parseResponse(response: Response, streaming: boolean, emitter: TooledPromptEmitter): Promise<ParsedResponse> {
+  async parseResponse(
+    response: Response,
+    streaming: boolean,
+    emitter: TooledPromptEmitter,
+    chunkTimeoutMs?: number,
+  ): Promise<ParsedResponse> {
     let content = '';
     const toolCalls: ToolCallInfo[] = [];
     let usage: Usage | undefined;
@@ -203,7 +208,7 @@ export class AnthropicProvider implements ProviderAdapter<AnthropicMessage> {
       let inputTokens = 0;
       let outputTokens = 0;
 
-      for await (const parsed of parseSSEStream(reader)) {
+      for await (const parsed of parseSSEStream(reader, chunkTimeoutMs)) {
         switch (parsed.type) {
           case 'message_start': {
             // Initial usage from message_start event
