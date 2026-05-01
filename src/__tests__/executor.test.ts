@@ -112,6 +112,7 @@ describe('runToolLoop', () => {
       maxTokens: undefined,
       systemPrompt: undefined,
       maxToolResultLength: undefined,
+      streamChunkTimeoutMs: undefined,
     };
   });
 

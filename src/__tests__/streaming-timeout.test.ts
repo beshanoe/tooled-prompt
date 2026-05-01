@@ -25,6 +25,7 @@ describe('streaming timeout', () => {
       maxTokens: undefined,
       systemPrompt: undefined,
       maxToolResultLength: undefined,
+      streamChunkTimeoutMs: undefined,
     };
   });
 

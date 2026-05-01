@@ -561,6 +561,7 @@ describe('toolEval', () => {
         maxTokens: undefined,
         systemPrompt: undefined,
         maxToolResultLength: undefined,
+        streamChunkTimeoutMs: undefined,
       };
     });
 

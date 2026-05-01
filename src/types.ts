@@ -129,6 +129,7 @@ const CONFIG_KEYS: ReadonlySet<string> = new Set([
   'systemPrompt',
   'maxToolResultLength',
   'tools',
+  'streamChunkTimeoutMs',
 ] satisfies readonly (keyof TooledPromptConfig)[]);
 
 /**
@@ -273,6 +274,8 @@ export interface TooledPromptConfig {
   maxToolResultLength?: number;
   /** Tools to include in every prompt execution. setConfig replaces factory tools; per-call tools are concatenated. */
   tools?: ToolFunction[];
+  /** Per-chunk deadline for streaming responses. Resets on every chunk; if no chunk arrives within this window the stream aborts. Defaults to 30000ms. */
+  streamChunkTimeoutMs?: number;
 }
 
 /**
@@ -305,6 +308,8 @@ export interface ResolvedTooledPromptConfig {
   systemPrompt: string | SystemPromptBuilder | undefined;
   /** Maximum length for tool result strings. When set, results exceeding this length are truncated. */
   maxToolResultLength: number | undefined;
+  /** Per-chunk deadline for streaming responses (ms). Undefined uses the provider default (30000ms). */
+  streamChunkTimeoutMs: number | undefined;
 }
 
 /**

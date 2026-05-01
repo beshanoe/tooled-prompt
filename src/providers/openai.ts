@@ -121,7 +121,12 @@ export class OpenAIProvider implements ProviderAdapter<OpenAIMessage> {
     });
   }
 
-  async parseResponse(response: Response, streaming: boolean, emitter: TooledPromptEmitter): Promise<ParsedResponse> {
+  async parseResponse(
+    response: Response,
+    streaming: boolean,
+    emitter: TooledPromptEmitter,
+    chunkTimeoutMs?: number,
+  ): Promise<ParsedResponse> {
     let content = '';
     let toolCalls: ToolCallInfo[] = [];
     let usage: Usage | undefined;
@@ -129,7 +134,7 @@ export class OpenAIProvider implements ProviderAdapter<OpenAIMessage> {
     if (streaming && response.body) {
       const reader = response.body.getReader();
 
-      for await (const chunk of parseSSEStream(reader)) {
+      for await (const chunk of parseSSEStream(reader, chunkTimeoutMs)) {
         // Capture usage from the final chunk (sent when stream_options.include_usage is true)
         if (chunk.usage) {
           usage = {

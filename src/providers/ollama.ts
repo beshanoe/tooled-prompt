@@ -164,7 +164,12 @@ export class OllamaProvider implements ProviderAdapter<OllamaMessage> {
     });
   }
 
-  async parseResponse(response: Response, streaming: boolean, emitter: TooledPromptEmitter): Promise<ParsedResponse> {
+  async parseResponse(
+    response: Response,
+    streaming: boolean,
+    emitter: TooledPromptEmitter,
+    chunkTimeoutMs: number = 30_000,
+  ): Promise<ParsedResponse> {
     let content = '';
     const toolCalls: ToolCallInfo[] = [];
     let usage: Usage | undefined;
@@ -176,7 +181,23 @@ export class OllamaProvider implements ProviderAdapter<OllamaMessage> {
       let buffer = '';
 
       while (true) {
-        const { done, value } = await reader.read();
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const chunkDeadline = new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error(`NDJSON chunk timeout after ${chunkTimeoutMs}ms`)), chunkTimeoutMs);
+          timer.unref?.();
+        });
+
+        let result: { done: boolean; value?: Uint8Array };
+        try {
+          result = await Promise.race([reader.read(), chunkDeadline]);
+        } catch (err) {
+          await reader.cancel().catch(() => {});
+          throw err;
+        } finally {
+          if (timer) clearTimeout(timer);
+        }
+
+        const { done, value } = result;
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
